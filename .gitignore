@@ -86,6 +86,8 @@ obj/
 *.spv
 _deps/
 enc_temp_folder/
+x64/
+x86/
 
 
 # Ignore objects created for local testing
