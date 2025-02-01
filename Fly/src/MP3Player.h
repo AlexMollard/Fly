@@ -52,6 +52,7 @@ public:
     void playNext();
     void playPrevious();
     void clearPlaylist();
+    void removeTrack(size_t index);
 
     void toggleRepeat();
     void toggleShuffle();

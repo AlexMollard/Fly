@@ -132,7 +132,7 @@ void Window::RenderPlaylistPanel()
 	ImGui::Text("Playlist");
 	ImGui::Separator();
 
-	const auto &playlist = m_mp3Player->getPlaylist();
+	const auto& playlist = m_mp3Player->getPlaylist();
 	for (size_t i = 0; i < playlist.size(); i++)
 	{
 		std::string filename = std::filesystem::path(playlist[i]).filename().string();
@@ -142,6 +142,36 @@ void Window::RenderPlaylistPanel()
 			m_mp3Player->play();
 		}
 	}
+
+	// Add spacing before the bottom controls
+	ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 50);
+	ImGui::Separator();
+
+	// Calculate positioning for centered buttons
+	float buttonWidth = 30.0f;
+	float spacing = ImGui::GetStyle().ItemSpacing.x;
+	float totalWidth = (buttonWidth * 2) + spacing;
+	float windowWidth = ImGui::GetWindowWidth();
+	float startX = (windowWidth - totalWidth) * 0.5f;
+
+	// Add button
+	ImGui::SetCursorPosX(startX);
+	if (ImGui::Button((ICON_LC_PLUS "##AddFile"), ImVec2(buttonWidth, 30.0f)))
+	{
+		m_show_file_dialog = true;
+	}
+
+	// Remove button
+	ImGui::SameLine();
+	if (ImGui::Button((ICON_LC_MINUS "##RemoveFile"), ImVec2(buttonWidth, 30.0f)))
+	{
+		if (!playlist.empty())
+		{
+			size_t lastIndex = playlist.size() - 1;
+			m_mp3Player->removeTrack(lastIndex);
+		}
+	}
+
 	ImGui::EndChild();
 }
 
@@ -149,7 +179,6 @@ void Window::RenderControlsPanel()
 {
 	ImGui::BeginChild("Controls", ImVec2(0, -1), true);
 
-	RenderFileControls();
 	RenderTrackInfo();
 	RenderPlaybackControls();
 	RenderVolumeControl();
@@ -158,37 +187,15 @@ void Window::RenderControlsPanel()
 	ImGui::EndChild();
 }
 
-void Window::RenderFileControls()
-{
-	if (ImGui::Button("Open File", ImVec2(120, 35)))
-	{
-		m_show_file_dialog = true;
-	}
-	ImGui::SameLine();
-	if (ImGui::Button("Clear Playlist", ImVec2(120, 35)))
-	{
-		m_mp3Player->clearPlaylist();
-	}
-
-	ImGui::Spacing();
-	ImGui::Separator();
-	ImGui::Spacing();
-}
-
 void Window::RenderTrackInfo()
 {
-	if (!m_mp3Player->getCurrentTrack().empty())
-	{
-		std::string filename = std::filesystem::path(m_mp3Player->getCurrentTrack()).filename().string();
-		ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-		ImGui::TextWrapped("Now Playing:");
-		ImGui::TextWrapped("%s", filename.c_str());
-		ImGui::PopFont();
+	std::string filename = std::filesystem::path(m_mp3Player->getCurrentTrack()).filename().string();
+	ImGui::TextWrapped("Now Playing:");
+	ImGui::TextWrapped("%s", filename.empty() ? "-" : filename.c_str());
 
-		RenderWaveform();
-		RenderProgressBar();
-		RenderTimeDisplay();
-	}
+	RenderWaveform();
+	RenderProgressBar();
+	RenderTimeDisplay();
 	ImGui::Spacing();
 }
 
@@ -327,15 +334,38 @@ void Window::RenderAudioFilters()
 		m_mp3Player->setPitch(pitch);
 	}
 
+	// Preset Buttons
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
+
+	ImGui::Text("Fun Presets");
+	ImGui::Spacing();
+
+	float buttonWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2) / 3;
+
+	if (ImGui::Button("Chipmunk Mode", ImVec2(buttonWidth, 35))) {
+		m_mp3Player->setPitch(50.0f);
+		m_mp3Player->setTreble(100.0f);
+		m_mp3Player->setBass(0.0f);
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Slowed", ImVec2(buttonWidth, 35))) {
+		m_mp3Player->setPitch(25.0f);
+		m_mp3Player->setBass(35.0f);
+		m_mp3Player->setTreble(0.0f);
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Reset", ImVec2(buttonWidth, 35))) {
+		m_mp3Player->setPitch(50.0f);
+		m_mp3Player->setTreble(0.0f);
+		m_mp3Player->setBass(100.0f);
+	}
+
 	ImGui::EndGroup();
 }
 
 void Window::RenderWaveform() {
-	if (m_mp3Player->getCurrentTrack().empty()) return;
-
-	const auto& waveformData = m_mp3Player->getWaveformData();
-	if (waveformData.empty()) return;
-
 	ImGui::Spacing();
 
 	float height = 100.0f;
@@ -348,6 +378,13 @@ void Window::RenderWaveform() {
 	// Background
 	drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y),
 		ImGui::GetColorU32(ImGuiCol_FrameBg));
+
+	ImGui::Dummy(size);
+
+	if (m_mp3Player->getCurrentTrack().empty()) return;
+
+	const auto& waveformData = m_mp3Player->getWaveformData();
+	if (waveformData.empty()) return;
 
 	// Draw waveform
 	const ImVec4& waveColor = ImGui::GetStyle().Colors[ImGuiCol_SliderGrab];
@@ -385,6 +422,4 @@ void Window::RenderWaveform() {
 		ImGui::GetColorU32(ImVec4(1.0f, 0.5f, 0.0f, 1.0f)),  // Orange line
 		2.0f
 	);
-
-	ImGui::Dummy(size);
 }

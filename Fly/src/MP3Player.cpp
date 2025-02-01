@@ -541,3 +541,17 @@ void MP3Player::processWaveformData(const std::vector<int16_t>& pcmData, int cha
 std::vector<float> MP3Player::getWaveformData() const {
     return waveformData;
 }
+
+void MP3Player::removeTrack(size_t index)
+{
+    if (index < playlist.size())
+    {
+        // If removing currently playing track, stop playback
+        if (playlist[index] == currentTrack)
+        {
+            stop();
+            currentTrack.clear();
+        }
+        playlist.erase(playlist.begin() + index);
+    }
+}
