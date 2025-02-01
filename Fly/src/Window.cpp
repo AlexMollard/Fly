@@ -20,6 +20,7 @@ void Window::Render()
 
 	RenderPlaylistPanel();
 	ImGui::SameLine();
+	ImGui::SetCursorPosY(ImGui::GetStyle().WindowPadding.y);
 	RenderControlsPanel();
 
 	// Show file dialog
@@ -126,47 +127,45 @@ void Window::GuiSetup()
 	colors[ImGuiCol_SeparatorActive] = orange;
 }
 
-void Window::RenderPlaylistPanel()
-{
-	ImGui::BeginChild("Playlist", ImVec2(ImGui::GetWindowWidth() * 0.3f, -1), true);
+void Window::RenderPlaylistPanel() {
+	// Calculate the heights
+	float totalHeight = ImGui::GetWindowHeight() - ImGui::GetStyle().WindowPadding.y * 3;
+	float controlsHeight = totalHeight * 0.1f;  // 10% of window height
+	float playlistHeight = totalHeight - controlsHeight;  // Remaining 90%
+	float panelWidth = ImGui::GetWindowWidth() * 0.3f;
+
+	// Main playlist panel
+	ImGui::BeginChild("Playlist", ImVec2(panelWidth, playlistHeight), true);
+
 	ImGui::Text("Playlist");
 	ImGui::Separator();
 
 	const auto& playlist = m_mp3Player->getPlaylist();
-	for (size_t i = 0; i < playlist.size(); i++)
-	{
+	for (size_t i = 0; i < playlist.size(); i++) {
 		std::string filename = std::filesystem::path(playlist[i]).filename().string();
-		if (ImGui::Selectable(filename.c_str(), m_mp3Player->getCurrentTrack() == playlist[i]))
-		{
+		if (ImGui::Selectable(filename.c_str(), m_mp3Player->getCurrentTrack() == playlist[i])) {
 			m_mp3Player->loadTrack(playlist[i]);
 			m_mp3Player->play();
 		}
 	}
+	ImGui::EndChild();
 
-	// Add spacing before the bottom controls
-	ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 50);
-	ImGui::Separator();
+	// Playlist controls - now using 10% of window height
+	ImGui::BeginChild("PlaylistControls", ImVec2(panelWidth, controlsHeight), true);
 
 	// Calculate positioning for centered buttons
-	float buttonWidth = 30.0f;
-	float spacing = ImGui::GetStyle().ItemSpacing.x;
-	float totalWidth = (buttonWidth * 2) + spacing;
-	float windowWidth = ImGui::GetWindowWidth();
-	float startX = (windowWidth - totalWidth) * 0.5f;
+	float buttonWidth = (panelWidth - ImGui::GetStyle().ItemSpacing.x * 4) * 0.5f;
+	float buttonHeight = controlsHeight - ImGui::GetStyle().ItemSpacing.y * 3;
 
 	// Add button
-	ImGui::SetCursorPosX(startX);
-	if (ImGui::Button((ICON_LC_PLUS "##AddFile"), ImVec2(buttonWidth, 30.0f)))
-	{
+	if (ImGui::Button((ICON_LC_PLUS "##AddFile"), ImVec2(buttonWidth, buttonHeight))) {
 		m_show_file_dialog = true;
 	}
 
 	// Remove button
 	ImGui::SameLine();
-	if (ImGui::Button((ICON_LC_MINUS "##RemoveFile"), ImVec2(buttonWidth, 30.0f)))
-	{
-		if (!playlist.empty())
-		{
+	if (ImGui::Button((ICON_LC_MINUS "##RemoveFile"), ImVec2(buttonWidth, buttonHeight))) {
+		if (!playlist.empty()) {
 			size_t lastIndex = playlist.size() - 1;
 			m_mp3Player->removeTrack(lastIndex);
 		}
@@ -177,7 +176,10 @@ void Window::RenderPlaylistPanel()
 
 void Window::RenderControlsPanel()
 {
-	ImGui::BeginChild("Controls", ImVec2(0, -1), true);
+	// Calculate the heights
+	float totalHeight = ImGui::GetWindowHeight() - ImGui::GetStyle().WindowPadding.y * 2.375f;
+
+	ImGui::BeginChild("Controls", ImVec2(0, totalHeight), true);
 
 	RenderTrackInfo();
 	RenderPlaybackControls();
@@ -196,12 +198,11 @@ void Window::RenderTrackInfo()
 	RenderWaveform();
 	RenderProgressBar();
 	RenderTimeDisplay();
-	ImGui::Spacing();
 }
 
 void Window::RenderProgressBar()
 {
-	float progress = (m_mp3Player->getCurrentTime() / m_mp3Player->getDuration()) * 100.0f;
+	float progress = static_cast<float>(m_mp3Player->getCurrentTime() / m_mp3Player->getDuration()) * 100.0f;
 	ImGui::SetNextItemWidth(-1);
 	if (ImGui::SliderFloat("##Progress", &progress, 0.0f, 100.0f, ""))
 	{
@@ -212,8 +213,8 @@ void Window::RenderProgressBar()
 void Window::RenderTimeDisplay()
 {
 	ImGui::Text("%s / %s",
-				FormatTime(m_mp3Player->getCurrentTime()).c_str(),
-				FormatTime(m_mp3Player->getDuration()).c_str());
+				FormatTime((float)m_mp3Player->getCurrentTime()).c_str(),
+				FormatTime((float)m_mp3Player->getDuration()).c_str());
 }
 
 void Window::RenderPlaybackControls()
@@ -295,45 +296,48 @@ void Window::RenderAudioFilters()
 	// Start a group for the filters
 	ImGui::BeginGroup();
 
-	// LowPass Control (50Hz - 2000Hz)
-	ImGui::AlignTextToFramePadding();
-	ImGui::Text(ICON_LC_AUDIO_WAVEFORM "  LowPass");
-	ImGui::SameLine(0, 8.0f);
+// Calculate the widest label to align all sliders
+    float maxLabelWidth = 0.0f;
+    maxLabelWidth = std::max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_AUDIO_WAVEFORM "  LowPass").x);
+    maxLabelWidth = std::max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_ACTIVITY "  HighPass").x);
+    maxLabelWidth = std::max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_FAST_FORWARD "  Pitch").x);
+    maxLabelWidth += ImGui::GetStyle().ItemSpacing.x; // Add some padding
 
-	float bass = m_mp3Player->getBass();
-	ImGui::SetNextItemWidth(-1);
-	if (ImGui::SliderFloat("##Bass", &bass, 0.0f, 100.0f, "%.0f%%"))
-	{
-		m_mp3Player->setBass(bass);
-	}
+    // LowPass Control (50Hz - 2000Hz)
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text(ICON_LC_AUDIO_WAVEFORM "  LowPass");
+    ImGui::SameLine(maxLabelWidth);
+    float bass = m_mp3Player->getBass();
+    ImGui::SetNextItemWidth(-1);
+    if (ImGui::SliderFloat("##Bass", &bass, 0.0f, 100.0f, "%.0f%%"))
+    {
+        m_mp3Player->setBass(bass);
+    }
 
-	ImGui::Spacing();
+    ImGui::Spacing();
 
-	// HighPass Control (2000Hz - 20000Hz)
-	ImGui::AlignTextToFramePadding();
-	ImGui::Text(ICON_LC_ACTIVITY "  HighPass");
-	ImGui::SameLine(0, 8.0f);
+    // HighPass Control (2000Hz - 20000Hz)
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text(ICON_LC_ACTIVITY "  HighPass");
+    ImGui::SameLine(maxLabelWidth);
+    float treble = m_mp3Player->getTreble();
+    ImGui::SetNextItemWidth(-1);
+    if (ImGui::SliderFloat("##Treble", &treble, 0.0f, 100.0f, "%.0f%%"))
+    {
+        m_mp3Player->setTreble(treble);
+    }
 
-	float treble = m_mp3Player->getTreble();
-	ImGui::SetNextItemWidth(-1);
-	if (ImGui::SliderFloat("##Treble", &treble, 0.0f, 100.0f, "%.0f%%"))
-	{
-		m_mp3Player->setTreble(treble);
-	}
-
-	// Pitch Control
-	ImGui::Spacing();
-	ImGui::AlignTextToFramePadding();
-	ImGui::Text(ICON_LC_FAST_FORWARD "  Pitch");
-	ImGui::SameLine(0, 8.0f);
-
-	float pitch = m_mp3Player->getPitch();
-	ImGui::SetNextItemWidth(-1);
-	if (ImGui::SliderFloat("##Pitch", &pitch, 0.0f, 100.0f, "%.0f%%"))
-	{
-		m_mp3Player->setPitch(pitch);
-	}
-
+    // Pitch Control
+    ImGui::Spacing();
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text(ICON_LC_FAST_FORWARD "  Pitch");
+    ImGui::SameLine(maxLabelWidth);
+    float pitch = m_mp3Player->getPitch();
+    ImGui::SetNextItemWidth(-1);
+    if (ImGui::SliderFloat("##Pitch", &pitch, 0.0f, 100.0f, "%.0f%%"))
+    {
+        m_mp3Player->setPitch(pitch);
+    }
 	// Preset Buttons
 	ImGui::Spacing();
 	ImGui::Separator();
@@ -414,7 +418,7 @@ void Window::RenderWaveform() {
 	}
 
 	// Add playback position indicator
-	float playbackPos = m_mp3Player->getCurrentTime() / m_mp3Player->getDuration();
+	float playbackPos = static_cast<float>(m_mp3Player->getCurrentTime() / m_mp3Player->getDuration());
 	float posX = pos.x + (size.x * playbackPos);
 	drawList->AddLine(
 		ImVec2(posX, pos.y),
