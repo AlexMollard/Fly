@@ -185,6 +185,7 @@ void Window::RenderTrackInfo()
 		ImGui::TextWrapped("%s", filename.c_str());
 		ImGui::PopFont();
 
+		RenderWaveform();
 		RenderProgressBar();
 		RenderTimeDisplay();
 	}
@@ -287,9 +288,9 @@ void Window::RenderAudioFilters()
 	// Start a group for the filters
 	ImGui::BeginGroup();
 
-	// Bass Control
+	// LowPass Control (50Hz - 2000Hz)
 	ImGui::AlignTextToFramePadding();
-	ImGui::Text(ICON_LC_AUDIO_WAVEFORM "  Bass");
+	ImGui::Text(ICON_LC_AUDIO_WAVEFORM "  LowPass");
 	ImGui::SameLine(0, 8.0f);
 
 	float bass = m_mp3Player->getBass();
@@ -301,9 +302,9 @@ void Window::RenderAudioFilters()
 
 	ImGui::Spacing();
 
-	// Treble Control
+	// HighPass Control (2000Hz - 20000Hz)
 	ImGui::AlignTextToFramePadding();
-	ImGui::Text(ICON_LC_ACTIVITY "  Treble");
+	ImGui::Text(ICON_LC_ACTIVITY "  HighPass");
 	ImGui::SameLine(0, 8.0f);
 
 	float treble = m_mp3Player->getTreble();
@@ -313,5 +314,77 @@ void Window::RenderAudioFilters()
 		m_mp3Player->setTreble(treble);
 	}
 
+	// Pitch Control
+	ImGui::Spacing();
+	ImGui::AlignTextToFramePadding();
+	ImGui::Text(ICON_LC_FAST_FORWARD "  Pitch");
+	ImGui::SameLine(0, 8.0f);
+
+	float pitch = m_mp3Player->getPitch();
+	ImGui::SetNextItemWidth(-1);
+	if (ImGui::SliderFloat("##Pitch", &pitch, 0.0f, 100.0f, "%.0f%%"))
+	{
+		m_mp3Player->setPitch(pitch);
+	}
+
 	ImGui::EndGroup();
+}
+
+void Window::RenderWaveform() {
+	if (m_mp3Player->getCurrentTrack().empty()) return;
+
+	const auto& waveformData = m_mp3Player->getWaveformData();
+	if (waveformData.empty()) return;
+
+	ImGui::Spacing();
+
+	float height = 100.0f;
+
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	ImVec2 pos = ImGui::GetCursorScreenPos();
+	ImVec2 size = ImGui::GetContentRegionAvail();
+	size.y = height;
+
+	// Background
+	drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y),
+		ImGui::GetColorU32(ImGuiCol_FrameBg));
+
+	// Draw waveform
+	const ImVec4& waveColor = ImGui::GetStyle().Colors[ImGuiCol_SliderGrab];
+	const float lineThickness = 1.0f;
+
+	// Center line
+	float centerY = pos.y + (size.y * 0.5f);
+	drawList->AddLine(
+		ImVec2(pos.x, centerY),
+		ImVec2(pos.x + size.x, centerY),
+		ImGui::GetColorU32(ImVec4(waveColor.x, waveColor.y, waveColor.z, 0.3f)), // Faded center line
+		1.0f
+	);
+
+	// Draw waveform as mirrored amplitude
+	for (size_t i = 0; i < waveformData.size(); i++) {
+		float x = pos.x + (size.x * i) / waveformData.size();
+		float amplitude = waveformData[i] * size.y * 0.25f; // Scale factor for visualization
+
+		// Draw vertical line for this sample
+		drawList->AddLine(
+			ImVec2(x, centerY - amplitude),
+			ImVec2(x, centerY + amplitude),
+			ImGui::GetColorU32(waveColor),
+			lineThickness
+		);
+	}
+
+	// Add playback position indicator
+	float playbackPos = m_mp3Player->getCurrentTime() / m_mp3Player->getDuration();
+	float posX = pos.x + (size.x * playbackPos);
+	drawList->AddLine(
+		ImVec2(posX, pos.y),
+		ImVec2(posX, pos.y + size.y),
+		ImGui::GetColorU32(ImVec4(1.0f, 0.5f, 0.0f, 1.0f)),  // Orange line
+		2.0f
+	);
+
+	ImGui::Dummy(size);
 }

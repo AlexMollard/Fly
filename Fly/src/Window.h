@@ -31,6 +31,7 @@ private:
 	void RenderPlaybackControls();
 	void RenderVolumeControl();
 	void RenderAudioFilters();
+	void RenderWaveform();
 
 	std::string FormatTime(float seconds);
 

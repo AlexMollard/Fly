@@ -13,9 +13,11 @@ static LPALEFFECTF alEffectf;
 static LPALGENFILTERS alGenFilters;
 static LPALGENEFFECTS alGenEffects;
 static LPALGENAUXILIARYEFFECTSLOTS alGenAuxiliaryEffectSlots;
+static LPALAUXILIARYEFFECTSLOTI alAuxiliaryEffectSloti;
 
 MP3Player::MP3Player()
-    : isPlaying(false), volume(80.0f), bass(50.0f), treble(50.0f), currentTrackIndex(0), repeat(false), shuffle(false)
+    : isPlaying(false), volume(40.0f), bass(100.0f), treble(0.0f),
+    pitch(50.0f), currentTrackIndex(0), repeat(false), shuffle(false)
 {
     initializeOpenAL();
     setupFilters();
@@ -105,6 +107,12 @@ void MP3Player::initializeOpenAL()
         throw std::runtime_error("EFX not supported: Could not load alGenAuxiliaryEffectSlots");
     }
 
+    alAuxiliaryEffectSloti = (LPALAUXILIARYEFFECTSLOTI)alGetProcAddress("alAuxiliaryEffectSloti");
+    if (!alAuxiliaryEffectSloti)
+    {
+        throw std::runtime_error("EFX not supported: Could not load alAuxiliaryEffectSloti");
+    }
+
     // Generate source
     alGenSources(1, &source);
 
@@ -118,38 +126,49 @@ void MP3Player::initializeOpenAL()
 
 void MP3Player::setupFilters()
 {
-    // Generate effect slot
-    alGenAuxiliaryEffectSlots(1, &effectSlot);
-
-    // Create equalizer effect
-    alGenEffects(1, &equalizerEffect);
-    alEffecti(equalizerEffect, AL_EFFECT_TYPE, AL_EFFECT_EQUALIZER);
-
-    // Create filters
+    // Generate filters
     alGenFilters(1, &lowpassFilter);
     alGenFilters(1, &highpassFilter);
 
+    // Set filter types
     alFilteri(lowpassFilter, AL_FILTER_TYPE, AL_FILTER_LOWPASS);
     alFilteri(highpassFilter, AL_FILTER_TYPE, AL_FILTER_HIGHPASS);
 
+    // Create effect for pitch shifting
+    alGenEffects(1, &pitchEffect);
+    alEffecti(pitchEffect, AL_EFFECT_TYPE, AL_EFFECT_PITCH_SHIFTER);
+
+    // Create auxiliary effect slot for pitch
+    alGenAuxiliaryEffectSlots(1, effectSlots);
+    alAuxiliaryEffectSloti(effectSlots[0], AL_EFFECTSLOT_EFFECT, pitchEffect);
+
+    // Initial filter values
     updateFilters();
 }
 
 void MP3Player::updateFilters()
 {
-    // Update low-pass filter (bass)
-    float bassGain = bass / 50.0f; // Convert 0-100 range to 0-2 range
-    alFilterf(lowpassFilter, AL_LOWPASS_GAIN, bassGain);
-    alFilterf(lowpassFilter, AL_LOWPASS_GAINHF, 0.5f + (bass / 200.0f));
+    // Bass control (lowpass filter)
+    // Map bass value (0-100) to frequency range (50Hz - 2000Hz)
+    float bassFreq = 50.0f + (bass / 100.0f) * 1950.0f;
+    alFilterf(lowpassFilter, AL_LOWPASS_GAIN, 1.0f);
+    alFilterf(lowpassFilter, AL_LOWPASS_GAINHF, bass / 100.0f);
 
-    // Update high-pass filter (treble)
-    float trebleGain = treble / 50.0f;
-    alFilterf(highpassFilter, AL_HIGHPASS_GAIN, trebleGain);
-    alFilterf(highpassFilter, AL_HIGHPASS_GAINLF, 0.5f + (treble / 200.0f));
+    // Treble control (highpass filter)
+    // Map treble value (0-100) to frequency range (2000Hz - 20000Hz)
+    float trebleFreq = 2000.0f + (treble / 100.0f) * 18000.0f;
+    alFilterf(highpassFilter, AL_HIGHPASS_GAIN, 1.0f);
+    alFilterf(highpassFilter, AL_HIGHPASS_GAINLF, treble / 100.0f);
 
     // Apply filters to source
-    alSource3i(source, AL_AUXILIARY_SEND_FILTER, effectSlot, 0, AL_FILTER_NULL);
     alSourcei(source, AL_DIRECT_FILTER, lowpassFilter);
+    alSource3i(source, AL_AUXILIARY_SEND_FILTER, effectSlots[0], 0, highpassFilter);
+
+    // Update pitch directly on the source
+    // Map pitch from 0-100 to 0.75-1.25 range for more subtle pitch adjustment
+    // 50 maps to 1.0 (normal pitch)
+    float pitchValue = 1.0f + ((pitch - 50.0f) / 100.0f) * 0.5f;
+    alSourcef(source, AL_PITCH, pitchValue);
 }
 
 bool MP3Player::loadTrack(const std::string &filename)
@@ -234,19 +253,19 @@ void MP3Player::cleanupOpenAL()
     alDeleteBuffers(buffers.size(), buffers.data());
     alDeleteFilters(1, &lowpassFilter);
     alDeleteFilters(1, &highpassFilter);
-    alDeleteEffects(1, &equalizerEffect);
-    alDeleteAuxiliaryEffectSlots(1, &effectSlot);
+    alDeleteEffects(1, &pitchEffect);
+    alDeleteAuxiliaryEffectSlots(1, effectSlots);
 
     alcMakeContextCurrent(nullptr);
     alcDestroyContext(context);
     alcCloseDevice(device);
 }
 
-bool MP3Player::loadAudioFile(const std::string &filename)
+bool MP3Player::loadAudioFile(const std::string& filename)
 {
     // libsndfile we need to decode the audio file into raw PCM data
     SF_INFO sfinfo;
-    SNDFILE *file = sf_open(filename.c_str(), SFM_READ, &sfinfo);
+    SNDFILE* file = sf_open(filename.c_str(), SFM_READ, &sfinfo);
     if (!file)
     {
         return false;
@@ -263,6 +282,9 @@ bool MP3Player::loadAudioFile(const std::string &filename)
     }
     sf_close(file);
 
+    // Process data for waveform visualization
+    processWaveformData(allData, sfinfo.channels);
+
     // Convert to raw PCM data
     const int dataSize = allData.size() * sizeof(int16_t);
 
@@ -272,7 +294,8 @@ bool MP3Player::loadAudioFile(const std::string &filename)
     buffers.push_back(buffer);
 
     // Upload audio data to buffer
-    alBufferData(buffer, (sfinfo.channels == 1) ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16, allData.data(), dataSize, sfinfo.samplerate);
+    alBufferData(buffer, (sfinfo.channels == 1) ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16,
+        allData.data(), dataSize, sfinfo.samplerate);
 
     // Attach buffer to source
     alSourcei(source, AL_BUFFER, buffer);
@@ -453,4 +476,68 @@ void MP3Player::setFilePath(const char *path)
 {
     strncpy_s(filepath, path, sizeof(filepath) - 1);
     filepath[sizeof(filepath) - 1] = '\0';
+}
+
+void MP3Player::setPitch(float newPitch) {
+    pitch = newPitch;
+    updateFilters();
+}
+
+float MP3Player::getPitch() const {
+    return pitch;
+}
+
+void MP3Player::processWaveformData(const std::vector<int16_t>& pcmData, int channels) {
+    waveformData.clear();
+
+    if (pcmData.empty()) return;
+
+    const size_t visPoints = 1000;
+    waveformData.reserve(visPoints);
+
+    size_t samplesPerPoint = (pcmData.size() / channels) / visPoints;
+    if (samplesPerPoint < 1) samplesPerPoint = 1;
+
+    // Find the maximum amplitude for normalization
+    float maxAmplitude = 0.0f;
+    for (size_t i = 0; i < pcmData.size(); i++) {
+        float amplitude = std::abs(pcmData[i] / 32768.0f);
+        maxAmplitude = std::max(maxAmplitude, amplitude);
+    }
+
+    // If the audio is too quiet, set a minimum amplification
+    if (maxAmplitude < 0.01f) maxAmplitude = 0.01f;
+
+    // Process the PCM data
+    for (size_t i = 0; i < visPoints && (i * samplesPerPoint * channels) < pcmData.size(); i++) {
+        float minSample = 0.0f;
+        float maxSample = 0.0f;
+        bool first = true;
+
+        // Find min and max values in this segment
+        for (size_t j = 0; j < samplesPerPoint && ((i * samplesPerPoint + j) * channels) < pcmData.size(); j++) {
+            for (int ch = 0; ch < channels; ch++) {
+                size_t idx = (i * samplesPerPoint + j) * channels + ch;
+                if (idx < pcmData.size()) {
+                    float sample = pcmData[idx] / 32768.0f;  // Normalize to [-1, 1]
+                    if (first) {
+                        minSample = maxSample = sample;
+                        first = false;
+                    }
+                    else {
+                        minSample = std::min(minSample, sample);
+                        maxSample = std::max(maxSample, sample);
+                    }
+                }
+            }
+        }
+
+        // Store the amplitude (max-min range) normalized by the maximum amplitude
+        float amplitude = (maxSample - minSample) / maxAmplitude;
+        waveformData.push_back(amplitude);
+    }
+}
+
+std::vector<float> MP3Player::getWaveformData() const {
+    return waveformData;
 }

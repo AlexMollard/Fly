@@ -14,7 +14,7 @@ private:
     ALCcontext *context;
     ALuint source;
     ALuint buffer;
-    std::vector<ALuint> buffers; // For streaming implementation
+    std::vector<ALuint> buffers;
 
     bool isPlaying;
     float volume;
@@ -29,18 +29,21 @@ private:
     bool repeat;
     bool shuffle;
 
-    // OpenAL Effect objects
-    ALuint effectSlot;
-    ALuint equalizerEffect;
     ALuint lowpassFilter;  // For bass control
     ALuint highpassFilter; // For treble control
+    ALuint pitchEffect;    // For pitch shifting
+    float pitch;
 
     void initializeOpenAL();
     void cleanupOpenAL();
     void setupFilters();
-    bool loadAudioFile(const std::string &filename);
     void updateFilters();
+    bool loadAudioFile(const std::string &filename);
 
+    ALuint effectSlots[2];
+    ALuint effects[2];
+
+    std::vector<float> waveformData;
 public:
     MP3Player();
     ~MP3Player();
@@ -78,4 +81,10 @@ public:
     const std::vector<std::string> &getPlaylist() const;
     const char *getFilePath() const;
     void setFilePath(const char *path);
+    
+    void setPitch(float newPitch);
+    float getPitch() const;
+
+    std::vector<float> getWaveformData() const;
+    void processWaveformData(const std::vector<int16_t>& pcmData, int channels);
 };
