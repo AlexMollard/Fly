@@ -129,16 +129,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="FileDialog.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="MP3Player.cpp" />
-    <ClCompile Include="Window.cpp" />
+    <ClCompile Include="src/FileDialog.cpp" />
+    <ClCompile Include="src/main.cpp" />
+    <ClCompile Include="src/MP3Player.cpp" />
+    <ClCompile Include="src/Window.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="FileDialog.h" />
-    <ClInclude Include="IconsLucide.h" />
-    <ClInclude Include="MP3Player.h" />
-    <ClInclude Include="Window.h" />
+    <ClInclude Include="src/FileDialog.h" />
+    <ClInclude Include="src/IconsLucide.h" />
+    <ClInclude Include="src/MP3Player.h" />
+    <ClInclude Include="src/Window.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
