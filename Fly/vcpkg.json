@@ -1,0 +1,21 @@
+{
+  "name": "modern-mp3-player",
+  "description": "A modern MP3 player with audio effects and visualization",
+  "dependencies": [
+    {
+      "name": "imgui",
+      "features": [ "docking-experimental" ]
+    },
+    {
+      "name": "openal-soft"
+    },
+    {
+      "name": "libsndfile",
+      "features": [ "external-libs" ]
+    },
+    {
+      "name": "hello-imgui",
+      "features": [ "opengl3-binding", "glfw-binding" ]
+    }
+  ]
+}
