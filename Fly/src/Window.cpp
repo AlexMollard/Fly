@@ -1,31 +1,33 @@
 #include "Window.h"
 #include <hello_imgui/hello_imgui.h>
 
-Window::Window(HelloImGui::RunnerParams& params)
-	: m_mp3Player(std::make_unique<MP3Player>())
-	, m_show_file_dialog(false)
-	, m_dialog(m_show_file_dialog, m_selected_file)
+Window::Window(HelloImGui::RunnerParams &params)
+	: m_mp3Player(std::make_unique<MP3Player>()), m_show_file_dialog(false), m_dialog(m_show_file_dialog, m_selected_file)
 {
-	params.callbacks.BeforeImGuiRender = [this]() { GuiSetup(); };
+	params.callbacks.BeforeImGuiRender = [this]()
+	{ GuiSetup(); };
 }
 
-void Window::Render() {
+void Window::Render()
+{
 	ImGui::SetNextWindowPos(ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 	ImGui::Begin("MP3 Player##MainWindow", nullptr,
-		ImGuiWindowFlags_NoTitleBar |
-		ImGuiWindowFlags_NoResize |
-		ImGuiWindowFlags_NoMove |
-		ImGuiWindowFlags_NoCollapse);
+				 ImGuiWindowFlags_NoTitleBar |
+					 ImGuiWindowFlags_NoResize |
+					 ImGuiWindowFlags_NoMove |
+					 ImGuiWindowFlags_NoCollapse);
 
 	RenderPlaylistPanel();
 	ImGui::SameLine();
 	RenderControlsPanel();
 
 	// Show file dialog
-	if (m_show_file_dialog) {
+	if (m_show_file_dialog)
+	{
 		m_dialog.Render();
-		if (!m_selected_file.empty()) {
+		if (!m_selected_file.empty())
+		{
 			m_mp3Player->loadTrack(m_selected_file);
 			m_mp3Player->play();
 			m_selected_file.clear();
@@ -35,23 +37,24 @@ void Window::Render() {
 	ImGui::End();
 }
 
-void Window::GuiSetup() {
+void Window::GuiSetup()
+{
 	ImGui::StyleColorsDark();
-	ImGuiStyle& style = ImGui::GetStyle();
+	ImGuiStyle &style = ImGui::GetStyle();
 
 	// Gruvbox Colors
-	const ImVec4 bg0_hard = ImVec4(0.1f, 0.1f, 0.1f, 1.0f);      // #1d2021
-	const ImVec4 bg0 = ImVec4(0.156f, 0.156f, 0.156f, 1.0f); // #282828
-	const ImVec4 bg1 = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);       // #3c3836
-	const ImVec4 bg2 = ImVec4(0.237f, 0.219f, 0.207f, 1.0f); // #504945
+	const ImVec4 bg0_hard = ImVec4(0.1f, 0.1f, 0.1f, 1.0f);		// #1d2021
+	const ImVec4 bg0 = ImVec4(0.156f, 0.156f, 0.156f, 1.0f);	// #282828
+	const ImVec4 bg1 = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);			// #3c3836
+	const ImVec4 bg2 = ImVec4(0.237f, 0.219f, 0.207f, 1.0f);	// #504945
 	const ImVec4 orange = ImVec4(0.956f, 0.517f, 0.235f, 1.0f); // #fe8019
-	const ImVec4 red = ImVec4(0.984f, 0.286f, 0.203f, 1.0f); // #fb4934
-	const ImVec4 green = ImVec4(0.721f, 0.733f, 0.149f, 1.0f); // #b8bb26
+	const ImVec4 red = ImVec4(0.984f, 0.286f, 0.203f, 1.0f);	// #fb4934
+	const ImVec4 green = ImVec4(0.721f, 0.733f, 0.149f, 1.0f);	// #b8bb26
 	const ImVec4 yellow = ImVec4(0.984f, 0.756f, 0.235f, 1.0f); // #fabd2f
-	const ImVec4 blue = ImVec4(0.513f, 0.647f, 0.596f, 1.0f); // #83a598
-	const ImVec4 aqua = ImVec4(0.556f, 0.752f, 0.486f, 1.0f); // #8ec07c
-	const ImVec4 fg1 = ImVec4(0.952f, 0.858f, 0.698f, 1.0f); // #ebdbb2
-	const ImVec4 fg2 = ImVec4(0.901f, 0.831f, 0.639f, 1.0f); // #d5c4a1
+	const ImVec4 blue = ImVec4(0.513f, 0.647f, 0.596f, 1.0f);	// #83a598
+	const ImVec4 aqua = ImVec4(0.556f, 0.752f, 0.486f, 1.0f);	// #8ec07c
+	const ImVec4 fg1 = ImVec4(0.952f, 0.858f, 0.698f, 1.0f);	// #ebdbb2
+	const ImVec4 fg2 = ImVec4(0.901f, 0.831f, 0.639f, 1.0f);	// #d5c4a1
 
 	// Styling
 	style.WindowRounding = 4.0f;
@@ -72,7 +75,7 @@ void Window::GuiSetup() {
 	style.FrameRounding = 4.0f;
 
 	// Colors
-	ImVec4* colors = style.Colors;
+	ImVec4 *colors = style.Colors;
 	colors[ImGuiCol_WindowBg] = bg0_hard;
 	colors[ImGuiCol_PopupBg] = bg0;
 
@@ -123,15 +126,18 @@ void Window::GuiSetup() {
 	colors[ImGuiCol_SeparatorActive] = orange;
 }
 
-void Window::RenderPlaylistPanel() {
+void Window::RenderPlaylistPanel()
+{
 	ImGui::BeginChild("Playlist", ImVec2(ImGui::GetWindowWidth() * 0.3f, -1), true);
 	ImGui::Text("Playlist");
 	ImGui::Separator();
 
-	const auto& playlist = m_mp3Player->getPlaylist();
-	for (size_t i = 0; i < playlist.size(); i++) {
+	const auto &playlist = m_mp3Player->getPlaylist();
+	for (size_t i = 0; i < playlist.size(); i++)
+	{
 		std::string filename = std::filesystem::path(playlist[i]).filename().string();
-		if (ImGui::Selectable(filename.c_str(), m_mp3Player->getCurrentTrack() == playlist[i])) {
+		if (ImGui::Selectable(filename.c_str(), m_mp3Player->getCurrentTrack() == playlist[i]))
+		{
 			m_mp3Player->loadTrack(playlist[i]);
 			m_mp3Player->play();
 		}
@@ -139,7 +145,8 @@ void Window::RenderPlaylistPanel() {
 	ImGui::EndChild();
 }
 
-void Window::RenderControlsPanel() {
+void Window::RenderControlsPanel()
+{
 	ImGui::BeginChild("Controls", ImVec2(0, -1), true);
 
 	RenderFileControls();
@@ -151,12 +158,15 @@ void Window::RenderControlsPanel() {
 	ImGui::EndChild();
 }
 
-void Window::RenderFileControls() {
-	if (ImGui::Button("Open File", ImVec2(120, 35))) {
+void Window::RenderFileControls()
+{
+	if (ImGui::Button("Open File", ImVec2(120, 35)))
+	{
 		m_show_file_dialog = true;
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("Clear Playlist", ImVec2(120, 35))) {
+	if (ImGui::Button("Clear Playlist", ImVec2(120, 35)))
+	{
 		m_mp3Player->clearPlaylist();
 	}
 
@@ -165,8 +175,10 @@ void Window::RenderFileControls() {
 	ImGui::Spacing();
 }
 
-void Window::RenderTrackInfo() {
-	if (!m_mp3Player->getCurrentTrack().empty()) {
+void Window::RenderTrackInfo()
+{
+	if (!m_mp3Player->getCurrentTrack().empty())
+	{
 		std::string filename = std::filesystem::path(m_mp3Player->getCurrentTrack()).filename().string();
 		ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
 		ImGui::TextWrapped("Now Playing:");
@@ -179,52 +191,64 @@ void Window::RenderTrackInfo() {
 	ImGui::Spacing();
 }
 
-void Window::RenderProgressBar() {
-	float progress = (m_mp3Player->getCurrentTime().asSeconds() / m_mp3Player->getDuration().asSeconds()) * 100.0f;
+void Window::RenderProgressBar()
+{
+	float progress = (m_mp3Player->getCurrentTime() / m_mp3Player->getDuration()) * 100.0f;
 	ImGui::SetNextItemWidth(-1);
-	if (ImGui::SliderFloat("##Progress", &progress, 0.0f, 100.0f, "")) {
+	if (ImGui::SliderFloat("##Progress", &progress, 0.0f, 100.0f, ""))
+	{
 		m_mp3Player->setCurrentTime(progress);
 	}
 }
 
-void Window::RenderTimeDisplay() {
+void Window::RenderTimeDisplay()
+{
 	ImGui::Text("%s / %s",
-		FormatTime(m_mp3Player->getCurrentTime().asSeconds()).c_str(),
-		FormatTime(m_mp3Player->getDuration().asSeconds()).c_str());
+				FormatTime(m_mp3Player->getCurrentTime()).c_str(),
+				FormatTime(m_mp3Player->getDuration()).c_str());
 }
 
-void Window::RenderPlaybackControls() {
+void Window::RenderPlaybackControls()
+{
 	float controlWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 4) / 5;
 	float buttonHeight = 35;
 
 	ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.5f, 0.5f));
 
-	if (ImGui::Button(("  " ICON_LC_SKIP_BACK "  "), ImVec2(controlWidth, buttonHeight))) {
+	if (ImGui::Button(("  " ICON_LC_SKIP_BACK "  "), ImVec2(controlWidth, buttonHeight)))
+	{
 		m_mp3Player->playPrevious();
 	}
 	ImGui::SameLine();
 	if (ImGui::Button(m_mp3Player->getIsPlaying() ? ("  " ICON_LC_PAUSE "  ") : ("  " ICON_LC_PLAY "  "),
-		ImVec2(controlWidth, buttonHeight))) {
-		if (m_mp3Player->getIsPlaying()) m_mp3Player->pause();
-		else m_mp3Player->play();
+					  ImVec2(controlWidth, buttonHeight)))
+	{
+		if (m_mp3Player->getIsPlaying())
+			m_mp3Player->pause();
+		else
+			m_mp3Player->play();
 	}
 	ImGui::SameLine();
-	if (ImGui::Button(("  " ICON_LC_SQUARE "  "), ImVec2(controlWidth, buttonHeight))) {
+	if (ImGui::Button(("  " ICON_LC_SQUARE "  "), ImVec2(controlWidth, buttonHeight)))
+	{
 		m_mp3Player->stop();
 	}
 	ImGui::SameLine();
-	if (ImGui::Button(("  " ICON_LC_SKIP_FORWARD "  "), ImVec2(controlWidth, buttonHeight))) {
+	if (ImGui::Button(("  " ICON_LC_SKIP_FORWARD "  "), ImVec2(controlWidth, buttonHeight)))
+	{
 		m_mp3Player->playNext();
 	}
 	ImGui::SameLine();
-	if (ImGui::Button(("  " ICON_LC_SHUFFLE "  "), ImVec2(controlWidth, buttonHeight))) {
+	if (ImGui::Button(("  " ICON_LC_SHUFFLE "  "), ImVec2(controlWidth, buttonHeight)))
+	{
 		m_mp3Player->toggleShuffle();
 	}
 
 	ImGui::PopStyleVar();
 }
 
-void Window::RenderVolumeControl() {
+void Window::RenderVolumeControl()
+{
 	float volume = m_mp3Player->getVolume();
 
 	// Start a group to ensure consistent alignment
@@ -233,18 +257,20 @@ void Window::RenderVolumeControl() {
 	// Volume icon with proper spacing
 	ImGui::AlignTextToFramePadding();
 	ImGui::Text(ICON_LC_VOLUME);
-	ImGui::SameLine(0, 8.0f);  // Add specific spacing after icon
+	ImGui::SameLine(0, 8.0f); // Add specific spacing after icon
 
 	// Volume slider
-	ImGui::SetNextItemWidth(-1);  // Take remaining width
-	if (ImGui::SliderFloat("##Volume", &volume, 0.0f, 100.0f, "%.0f%%")) {
+	ImGui::SetNextItemWidth(-1); // Take remaining width
+	if (ImGui::SliderFloat("##Volume", &volume, 0.0f, 100.0f, "%.0f%%"))
+	{
 		m_mp3Player->setVolume(volume);
 	}
 
 	ImGui::EndGroup();
 }
 
-std::string Window::FormatTime(float seconds) {
+std::string Window::FormatTime(float seconds)
+{
 	int minutes = static_cast<int>(seconds) / 60;
 	int secs = static_cast<int>(seconds) % 60;
 	char buffer[32];
@@ -252,7 +278,8 @@ std::string Window::FormatTime(float seconds) {
 	return std::string(buffer);
 }
 
-void Window::RenderAudioFilters() {
+void Window::RenderAudioFilters()
+{
 	ImGui::Spacing();
 	ImGui::Separator();
 	ImGui::Spacing();
@@ -267,7 +294,8 @@ void Window::RenderAudioFilters() {
 
 	float bass = m_mp3Player->getBass();
 	ImGui::SetNextItemWidth(-1);
-	if (ImGui::SliderFloat("##Bass", &bass, 0.0f, 100.0f, "%.0f%%")) {
+	if (ImGui::SliderFloat("##Bass", &bass, 0.0f, 100.0f, "%.0f%%"))
+	{
 		m_mp3Player->setBass(bass);
 	}
 
@@ -280,7 +308,8 @@ void Window::RenderAudioFilters() {
 
 	float treble = m_mp3Player->getTreble();
 	ImGui::SetNextItemWidth(-1);
-	if (ImGui::SliderFloat("##Treble", &treble, 0.0f, 100.0f, "%.0f%%")) {
+	if (ImGui::SliderFloat("##Treble", &treble, 0.0f, 100.0f, "%.0f%%"))
+	{
 		m_mp3Player->setTreble(treble);
 	}
 
