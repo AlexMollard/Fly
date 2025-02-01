@@ -22,7 +22,7 @@ int main(int, char**)
         float baseFontSize = 16.0f;
 
         // Load the regular font
-        io.Fonts->AddFontFromFileTTF("../JetBrainsMono.ttf", baseFontSize);
+        io.Fonts->AddFontFromFileTTF("../res/JetBrainsMono.ttf", baseFontSize);
 
         // Load the icon font
         static const ImWchar icons_ranges[] = { ICON_MIN_LC, ICON_MAX_LC, 0 };
@@ -32,7 +32,7 @@ int main(int, char**)
         icons_config.OversampleH = 2;
         icons_config.OversampleV = 2;
         icons_config.GlyphOffset = ImVec2(0, 3);
-        io.Fonts->AddFontFromFileTTF("../lucide.ttf", baseFontSize, &icons_config, icons_ranges);
+        io.Fonts->AddFontFromFileTTF("../res/lucide.ttf", baseFontSize, &icons_config, icons_ranges);
 
         io.FontGlobalScale = 1.f;
         };
