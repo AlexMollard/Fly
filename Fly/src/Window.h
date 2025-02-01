@@ -17,6 +17,7 @@ class Window {
 public:
 	Window(HelloImGui::RunnerParams& params);
 
+	void Update();
 	void Render();
 
 private:
@@ -24,14 +25,13 @@ private:
 
 	void RenderPlaylistPanel();
 	void RenderControlsPanel();
-	void RenderFileControls();
 	void RenderTrackInfo();
 	void RenderProgressBar();
 	void RenderTimeDisplay();
 	void RenderPlaybackControls();
 	void RenderVolumeControl();
 	void RenderAudioFilters();
-	void RenderWaveform();
+	void RenderVisualizer();
 
 	std::string FormatTime(float seconds);
 

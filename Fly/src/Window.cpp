@@ -8,6 +8,11 @@ Window::Window(HelloImGui::RunnerParams &params)
 	{ GuiSetup(); };
 }
 
+void Window::Update()
+{
+	m_mp3Player->update();
+}
+
 void Window::Render()
 {
 	ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -199,26 +204,70 @@ void Window::RenderTrackInfo()
 	ImGui::TextWrapped("Now Playing:");
 	ImGui::TextWrapped("%s", filename.empty() ? "-" : filename.c_str());
 
-	RenderWaveform();
+	RenderVisualizer();
 	RenderProgressBar();
 	RenderTimeDisplay();
 }
 
 void Window::RenderProgressBar()
 {
-	float progress = static_cast<float>(m_mp3Player->getCurrentTime() / m_mp3Player->getDuration()) * 100.0f;
-	ImGui::SetNextItemWidth(-1);
-	if (ImGui::SliderFloat("##Progress", &progress, 0.0f, 100.0f, ""))
-	{
-		m_mp3Player->setCurrentTime(progress);
+	static float lastProgress = 0.0f;
+	static bool isDragging = false;
+	static float dragProgress = 0.0f;
+
+	double currentTime = m_mp3Player->getCurrentTime();
+	double duration = m_mp3Player->getDuration();
+
+	// Calculate current progress and round to 1 decimal place to reduce jitter
+	float progress = (duration > 0.0) ? static_cast<float>((currentTime / duration) * 100.0f) : 0.0f;
+	progress = std::round(progress * 10.0f) / 10.0f;  // Round to nearest 0.1
+	progress = std::clamp(progress, 0.0f, 100.0f);
+
+	// Only update last progress if not dragging
+	if (!isDragging) {
+		lastProgress = progress;
+		dragProgress = progress;
 	}
+
+	// Display progress - use drag progress while dragging, actual progress otherwise
+	float displayProgress = isDragging ? dragProgress : lastProgress;
+
+	// Start the slider
+	ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+	ImGui::SetNextItemWidth(-1);
+
+	if (ImGui::SliderFloat("##Progress", &dragProgress, 0.0f, 100.0f, "")) {
+		if (!isDragging) {
+			isDragging = true;
+		}
+	}
+
+	// Handle drag state
+	if (ImGui::IsItemActive()) {
+		isDragging = true;
+	}
+	else if (isDragging) {
+		// User finished dragging - update position
+		isDragging = false;
+		m_mp3Player->setCurrentTime(dragProgress);
+		lastProgress = dragProgress;
+	}
+
+	ImGui::PopStyleColor();
 }
 
 void Window::RenderTimeDisplay()
 {
-	ImGui::Text("%s / %s",
-				FormatTime((float)m_mp3Player->getCurrentTime()).c_str(),
-				FormatTime((float)m_mp3Player->getDuration()).c_str());
+	// Get current playback time and total duration
+	double currentTime = m_mp3Player->getCurrentTime();
+	double duration = m_mp3Player->getDuration();
+
+	// Format both times
+	std::string currentTimeStr = FormatTime(currentTime);
+	std::string durationStr = FormatTime(duration);
+
+	// Display formatted time
+	ImGui::Text("%s / %s", currentTimeStr.c_str(), durationStr.c_str());
 }
 
 void Window::RenderPlaybackControls()
@@ -284,11 +333,14 @@ void Window::RenderVolumeControl()
 
 std::string Window::FormatTime(float seconds)
 {
-	int minutes = static_cast<int>(seconds) / 60;
-	int secs = static_cast<int>(seconds) % 60;
-	char buffer[32];
-	snprintf(buffer, sizeof(buffer), "%02d:%02d", minutes, secs);
-	return std::string(buffer);
+	int totalSeconds = static_cast<int>(seconds);
+	int minutes = totalSeconds / 60;
+	int remainingSeconds = totalSeconds % 60;
+
+	std::stringstream ss;
+	ss << std::setw(2) << std::setfill('0') << minutes << ":"
+		<< std::setw(2) << std::setfill('0') << remainingSeconds;
+	return ss.str();
 }
 
 void Window::RenderAudioFilters()
@@ -373,61 +425,65 @@ void Window::RenderAudioFilters()
 	ImGui::EndGroup();
 }
 
-void Window::RenderWaveform() {
-	ImGui::Spacing();
+void Window::RenderVisualizer() {
+	float VISUALIZER_HEIGHT = 100.0f;
+	const float MIN_BAR_HEIGHT = 2.0f;
+	const float BAR_SPACING = 1.0f;
 
-	float height = 100.0f;
+	ImGui::BeginChild("Visualizer", ImVec2(0, VISUALIZER_HEIGHT), true,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-	ImDrawList* drawList = ImGui::GetWindowDrawList();
-	ImVec2 pos = ImGui::GetCursorScreenPos();
-	ImVec2 size = ImGui::GetContentRegionAvail();
-	size.y = height;
-
-	// Background
-	drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y),
-		ImGui::GetColorU32(ImGuiCol_FrameBg));
-
-	ImGui::Dummy(size);
-
-	if (m_mp3Player->getCurrentTrack().empty()) return;
-
-	const auto& waveformData = m_mp3Player->getWaveformData();
-	if (waveformData.empty()) return;
-
-	// Draw waveform
-	const ImVec4& waveColor = ImGui::GetStyle().Colors[ImGuiCol_SliderGrab];
-	const float lineThickness = 1.0f;
-
-	// Center line
-	float centerY = pos.y + (size.y * 0.5f);
-	drawList->AddLine(
-		ImVec2(pos.x, centerY),
-		ImVec2(pos.x + size.x, centerY),
-		ImGui::GetColorU32(ImVec4(waveColor.x, waveColor.y, waveColor.z, 0.3f)), // Faded center line
-		1.0f
-	);
-
-	// Draw waveform as mirrored amplitude
-	for (size_t i = 0; i < waveformData.size(); i++) {
-		float x = pos.x + (size.x * i) / waveformData.size();
-		float amplitude = waveformData[i] * size.y * 0.25f; // Scale factor for visualization
-
-		// Draw vertical line for this sample
-		drawList->AddLine(
-			ImVec2(x, centerY - amplitude),
-			ImVec2(x, centerY + amplitude),
-			ImGui::GetColorU32(waveColor),
-			lineThickness
-		);
+	const std::vector<float>& vizData = m_mp3Player->getVisualizerData();
+	if (vizData.empty()) {
+		ImGui::EndChild();
+		return;
 	}
 
-	// Add playback position indicator
-	float playbackPos = static_cast<float>(m_mp3Player->getCurrentTime() / m_mp3Player->getDuration());
-	float posX = pos.x + (size.x * playbackPos);
-	drawList->AddLine(
-		ImVec2(posX, pos.y),
-		ImVec2(posX, pos.y + size.y),
-		ImGui::GetColorU32(ImVec4(1.0f, 0.5f, 0.0f, 1.0f)),  // Orange line
-		2.0f
-	);
+	VISUALIZER_HEIGHT -= ImGui::GetStyle().WindowPadding.y * 2;
+
+	// Get color from ImGui style
+	const ImGuiStyle& style = ImGui::GetStyle();
+	ImVec4 barColor = style.Colors[ImGuiCol_ButtonActive];
+
+	// Calculate dimensions
+	ImVec2 contentRegion = ImGui::GetContentRegionAvail();
+	float availWidth = contentRegion.x;
+	float barWidth = (availWidth - (BAR_SPACING * (vizData.size() - 1))) / vizData.size();
+	float centerY = VISUALIZER_HEIGHT / 2.0f;
+
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(BAR_SPACING, 0));
+
+	for (size_t i = 0; i < vizData.size(); i++) {
+		float rawHeight = vizData[i] * (VISUALIZER_HEIGHT * 0.95f);
+		float height = std::max(rawHeight, MIN_BAR_HEIGHT);
+		float halfHeight = height / 2.0f;
+
+		ImGui::PushID(static_cast<int>(i));
+
+		// Draw centered bar
+		ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+		// Calculate vertical positions for centered bar
+		float topY = cursorPos.y + centerY - halfHeight;
+		float bottomY = cursorPos.y + centerY + halfHeight;
+
+		// Draw simple solid bar
+		drawList->AddRectFilled(
+			ImVec2(cursorPos.x, topY),
+			ImVec2(cursorPos.x + barWidth, bottomY),
+			ImGui::GetColorU32(barColor)
+		);
+
+		ImGui::Dummy(ImVec2(barWidth, VISUALIZER_HEIGHT));
+
+		if (i < vizData.size() - 1) {
+			ImGui::SameLine();
+		}
+
+		ImGui::PopID();
+	}
+
+	ImGui::PopStyleVar();
+	ImGui::EndChild();
 }

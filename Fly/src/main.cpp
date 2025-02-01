@@ -42,6 +42,7 @@ int main(int, char**)
 
     // Main GUI callback
     params.callbacks.ShowGui = [&]() {
+        playerWindow->Update();
         playerWindow->Render();
         };
 

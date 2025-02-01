@@ -136,12 +136,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\AudioVisualizer.cpp" />
     <ClCompile Include="src/FileDialog.cpp" />
     <ClCompile Include="src/main.cpp" />
     <ClCompile Include="src/MP3Player.cpp" />
     <ClCompile Include="src/Window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\AudioVisualizer.h" />
     <ClInclude Include="src/FileDialog.h" />
     <ClInclude Include="src/IconsLucide.h" />
     <ClInclude Include="src/MP3Player.h" />

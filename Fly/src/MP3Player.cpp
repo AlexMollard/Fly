@@ -1,6 +1,8 @@
 #include "MP3Player.h"
 #include <AL/efx.h>
-#include <sndfile.h>
+#include <complex>
+#include <cmath>
+
 
 static LPALDELETEFILTERS alDeleteFilters;
 static LPALDELETEEFFECTS alDeleteEffects;
@@ -15,6 +17,57 @@ static LPALGENEFFECTS alGenEffects;
 static LPALGENAUXILIARYEFFECTSLOTS alGenAuxiliaryEffectSlots;
 static LPALAUXILIARYEFFECTSLOTI alAuxiliaryEffectSloti;
 
+class AudioLimiter {
+private:
+    float threshold;
+    float releaseTime;
+    float currentGain;
+
+public:
+    AudioLimiter(float threshold = 0.9f, float releaseTime = 0.1f)
+        : threshold(threshold), releaseTime(releaseTime), currentGain(1.0f) {}
+
+    void process(std::vector<int16_t>& samples, int channels, int sampleRate) {
+        float releaseCoeff = exp(-1.0f / (releaseTime * sampleRate));
+
+        // Look ahead window for peak detection
+        const int lookAhead = 32;
+        std::vector<float> peaks(samples.size() / channels);
+
+        // Find peaks
+        for (size_t i = 0; i < samples.size(); i += channels) {
+            float maxSample = 0.0f;
+            for (int ch = 0; ch < channels; ch++) {
+                float sample = std::abs(samples[i + ch] / 32768.0f);
+                maxSample = std::max(maxSample, sample);
+            }
+            peaks[i / channels] = maxSample;
+        }
+
+        // Calculate gain reduction
+        for (size_t i = 0; i < samples.size(); i += channels) {
+            float maxPeak = 0.0f;
+            // Look ahead for peaks
+            for (int j = 0; j < lookAhead && (i / channels + j) < peaks.size(); j++) {
+                maxPeak = std::max(maxPeak, peaks[i / channels + j]);
+            }
+
+            float targetGain = (maxPeak > threshold) ? threshold / maxPeak : 1.0f;
+            currentGain = std::min(currentGain / releaseCoeff, targetGain);
+
+            // Apply gain
+            for (int ch = 0; ch < channels; ch++) {
+                float sample = samples[i + ch] / 32768.0f;
+                sample *= currentGain;
+                samples[i + ch] = static_cast<int16_t>(std::clamp(sample * 32768.0f, -32768.0f, 32767.0f));
+            }
+        }
+    }
+};
+
+
+
+
 MP3Player::MP3Player()
     : isPlaying(false), volume(40.0f), bass(100.0f), treble(0.0f),
     pitch(50.0f), currentTrackIndex(0), repeat(false), shuffle(false)
@@ -25,6 +78,7 @@ MP3Player::MP3Player()
 
 MP3Player::~MP3Player()
 {
+    clearStreamBuffers();
     cleanupOpenAL();
 }
 
@@ -37,8 +91,20 @@ void MP3Player::initializeOpenAL()
         throw std::runtime_error("Failed to open OpenAL device");
     }
 
-    // Create context
-    context = alcCreateContext(device, nullptr);
+    ALCint refresh;
+    alcGetIntegerv(device, ALC_REFRESH, 1, &refresh);
+
+    // Set device parameters
+    ALCint attrs[] = {
+        ALC_REFRESH, refresh,
+        ALC_SYNC, AL_FALSE,  // Disable forced synchronization
+        ALC_MONO_SOURCES, 4,
+        ALC_STEREO_SOURCES, 2,
+        0
+    };
+
+    context = alcCreateContext(device, attrs);
+    alcMakeContextCurrent(context);
     if (!context)
     {
         alcCloseDevice(device);
@@ -171,20 +237,40 @@ void MP3Player::updateFilters()
     alSourcef(source, AL_PITCH, pitchValue);
 }
 
-bool MP3Player::loadTrack(const std::string &filename)
-{
+bool MP3Player::loadTrack(const std::string& filename) {
     stop();
+    clearStreamBuffers();
 
-    if (!loadAudioFile(filename))
-    {
+    // Open audio file for streaming
+    streamFile = sf_open(filename.c_str(), SFM_READ, &sfinfo);
+    if (!streamFile) {
         return false;
     }
 
+    // Store total frames and calculate duration
+    totalFrames = sfinfo.frames;
+    streamDuration = static_cast<double>(totalFrames) / sfinfo.samplerate;
+    streamPosition = 0.0;
+    pausedTime = 0.0;
+
+    // Generate streaming buffers
+    streamBuffers.resize(NUM_BUFFERS);
+    alGenBuffers(NUM_BUFFERS, streamBuffers.data());
+
+    // Initial fill of all buffers
+    for (ALuint buffer : streamBuffers) {
+        if (!streamChunk(buffer)) {
+            clearStreamBuffers();
+            return false;
+        }
+        alSourceQueueBuffers(source, 1, &buffer);
+    }
+
     currentTrack = filename;
+    streaming = true;
 
     // Add to playlist if not already present
-    if (std::find(playlist.begin(), playlist.end(), filename) == playlist.end())
-    {
+    if (std::find(playlist.begin(), playlist.end(), filename) == playlist.end()) {
         playlist.push_back(filename);
         currentTrackIndex = playlist.size() - 1;
     }
@@ -192,10 +278,11 @@ bool MP3Player::loadTrack(const std::string &filename)
     return true;
 }
 
-void MP3Player::play()
-{
-    if (!currentTrack.empty())
-    {
+void MP3Player::play() {
+    if (!currentTrack.empty() && streaming) {
+        if (pausedTime > 0.0) {
+            seekToPosition(pausedTime);
+        }
         alSourcePlay(source);
         isPlaying = true;
     }
@@ -259,48 +346,6 @@ void MP3Player::cleanupOpenAL()
     alcMakeContextCurrent(nullptr);
     alcDestroyContext(context);
     alcCloseDevice(device);
-}
-
-bool MP3Player::loadAudioFile(const std::string& filename)
-{
-    // libsndfile we need to decode the audio file into raw PCM data
-    SF_INFO sfinfo;
-    SNDFILE* file = sf_open(filename.c_str(), SFM_READ, &sfinfo);
-    if (!file)
-    {
-        return false;
-    }
-
-    // Read audio data
-    const int bufferSize = 4096;
-    std::vector<int16_t> pcmData(bufferSize * sfinfo.channels);
-    std::vector<int16_t> allData;
-    sf_count_t bytesRead = 0;
-    while ((bytesRead = sf_readf_short(file, pcmData.data(), bufferSize)) > 0)
-    {
-        allData.insert(allData.end(), pcmData.begin(), pcmData.begin() + bytesRead * sfinfo.channels);
-    }
-    sf_close(file);
-
-    // Process data for waveform visualization
-    processWaveformData(allData, sfinfo.channels);
-
-    // Convert to raw PCM data
-    const int dataSize = allData.size() * sizeof(int16_t);
-
-    // Generate buffer
-    ALuint buffer;
-    alGenBuffers(1, &buffer);
-    buffers.push_back(buffer);
-
-    // Upload audio data to buffer
-    alBufferData(buffer, (sfinfo.channels == 1) ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16,
-        allData.data(), dataSize, sfinfo.samplerate);
-
-    // Attach buffer to source
-    alSourcei(source, AL_BUFFER, buffer);
-
-    return true;
 }
 
 void MP3Player::playNext()
@@ -424,49 +469,6 @@ std::string MP3Player::getCurrentTrack() const
     return currentTrack;
 }
 
-double MP3Player::getDuration() const
-{
-    ALint sizeInBytes;
-    ALint channels;
-    ALint bits;
-    ALint frequency;
-
-    if (buffers.empty())
-        return 0.0;
-
-    alGetBufferi(buffers.back(), AL_SIZE, &sizeInBytes);
-    alGetBufferi(buffers.back(), AL_CHANNELS, &channels);
-    alGetBufferi(buffers.back(), AL_BITS, &bits);
-    alGetBufferi(buffers.back(), AL_FREQUENCY, &frequency);
-
-    if (frequency == 0 || channels == 0 || bits == 0)
-        return 0.0;
-
-    // Calculate duration in seconds
-    double duration = static_cast<double>(sizeInBytes * 8) / (channels * bits * frequency);
-    return duration;
-}
-
-double MP3Player::getCurrentTime() const
-{
-    if (!isPlaying)
-        return pausedTime;
-
-    ALfloat seconds = 0.0f;
-    alGetSourcef(source, AL_SEC_OFFSET, &seconds);
-    return static_cast<double>(seconds);
-}
-
-void MP3Player::setCurrentTime(float percentage)
-{
-    if (percentage < 0.0f || percentage > 100.0f)
-        return;
-
-    ALfloat duration = static_cast<ALfloat>(getDuration());
-    ALfloat newPosition = duration * (percentage / 100.0f);
-    alSourcef(source, AL_SEC_OFFSET, newPosition);
-}
-
 const char *MP3Player::getFilePath() const
 {
     return filepath;
@@ -487,54 +489,11 @@ float MP3Player::getPitch() const {
     return pitch;
 }
 
-void MP3Player::processWaveformData(const std::vector<int16_t>& pcmData, int channels) {
-    waveformData.clear();
-
-    if (pcmData.empty()) return;
-
-    const size_t visPoints = 1000;
-    waveformData.reserve(visPoints);
-
-    size_t samplesPerPoint = (pcmData.size() / channels) / visPoints;
-    if (samplesPerPoint < 1) samplesPerPoint = 1;
-
-    // Find the maximum amplitude for normalization
-    float maxAmplitude = 0.0f;
-    for (size_t i = 0; i < pcmData.size(); i++) {
-        float amplitude = std::abs(pcmData[i] / 32768.0f);
-        maxAmplitude = std::max(maxAmplitude, amplitude);
-    }
-
-    // If the audio is too quiet, set a minimum amplification
-    if (maxAmplitude < 0.01f) maxAmplitude = 0.01f;
-
-    // Process the PCM data
-    for (size_t i = 0; i < visPoints && (i * samplesPerPoint * channels) < pcmData.size(); i++) {
-        float minSample = 0.0f;
-        float maxSample = 0.0f;
-        bool first = true;
-
-        // Find min and max values in this segment
-        for (size_t j = 0; j < samplesPerPoint && ((i * samplesPerPoint + j) * channels) < pcmData.size(); j++) {
-            for (int ch = 0; ch < channels; ch++) {
-                size_t idx = (i * samplesPerPoint + j) * channels + ch;
-                if (idx < pcmData.size()) {
-                    float sample = pcmData[idx] / 32768.0f;  // Normalize to [-1, 1]
-                    if (first) {
-                        minSample = maxSample = sample;
-                        first = false;
-                    }
-                    else {
-                        minSample = std::min(minSample, sample);
-                        maxSample = std::max(maxSample, sample);
-                    }
-                }
-            }
-        }
-
-        // Store the amplitude (max-min range) normalized by the maximum amplitude
-        float amplitude = (maxSample - minSample) / maxAmplitude;
-        waveformData.push_back(amplitude);
+void MP3Player::update()
+{
+    if (isPlaying) {
+        updateStream();
+        visualizer.update();
     }
 }
 
@@ -554,4 +513,152 @@ void MP3Player::removeTrack(size_t index)
         }
         playlist.erase(playlist.begin() + index);
     }
+}
+
+void MP3Player::updateStream() {
+    if (!streaming || !streamFile) return;
+
+    ALint processed;
+    alGetSourcei(source, AL_BUFFERS_PROCESSED, &processed);
+
+    while (processed--) {
+        ALuint buffer;
+        alSourceUnqueueBuffers(source, 1, &buffer);
+
+        if (!streamChunk(buffer)) {
+            if (repeat) {
+                sf_seek(streamFile, 0, SEEK_SET);
+                streamChunk(buffer);
+            }
+        }
+        alSourceQueueBuffers(source, 1, &buffer);
+    }
+
+    // Check playback status
+    ALint state;
+    alGetSourcei(source, AL_SOURCE_STATE, &state);
+    if (state != AL_PLAYING && state != AL_PAUSED) {
+        ALint queued;
+        alGetSourcei(source, AL_BUFFERS_QUEUED, &queued);
+        if (queued > 0) {
+            alSourcePlay(source);
+        }
+    }
+}
+
+bool MP3Player::streamChunk(ALuint buffer) {
+    std::vector<int16_t> data(BUFFER_SIZE * sfinfo.channels);
+
+    sf_count_t samplesRead = sf_readf_short(streamFile, data.data(), BUFFER_SIZE);
+    if (samplesRead > 0) {
+        // Apply audio limiter
+        AudioLimiter limiter(0.95f, 0.05f);
+        limiter.process(data, sfinfo.channels, sfinfo.samplerate);
+
+        // Process audio data for visualization before queuing
+        visualizer.pushAudioData(data, sfinfo.channels, sfinfo.samplerate);
+
+        // Update our stream position tracking
+        updateStreamPosition();
+
+        // Queue the processed audio data
+        alBufferData(buffer,
+            (sfinfo.channels == 1) ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16,
+            data.data(),
+            samplesRead * sfinfo.channels * sizeof(int16_t),
+            sfinfo.samplerate);
+
+        return true;
+    }
+    return false;
+}
+
+void MP3Player::clearStreamBuffers() {
+    if (!streamBuffers.empty()) {
+        alSourceStop(source);
+        alSourcei(source, AL_BUFFER, 0);
+        alDeleteBuffers(streamBuffers.size(), streamBuffers.data());
+        streamBuffers.clear();
+    }
+
+    if (streamFile) {
+        sf_close(streamFile);
+        streamFile = nullptr;
+    }
+}
+
+
+double MP3Player::getDuration() const {
+    if (!streamFile) return 0.0;
+    return streamDuration;
+}
+
+double MP3Player::getCurrentTime() const {
+    if (!streamFile) return 0.0;
+    if (!isPlaying) return pausedTime;
+
+    // Get the current position in the current buffer
+    ALint sampleOffset;
+    alGetSourcei(source, AL_SAMPLE_OFFSET, &sampleOffset);
+
+    // Get number of processed buffers
+    ALint processedBuffers;
+    alGetSourcei(source, AL_BUFFERS_PROCESSED, &processedBuffers);
+
+    // Get current buffer position in samples
+    // Each buffer is BUFFER_SIZE samples
+    sf_count_t totalSamples = streamPosition + processedBuffers * BUFFER_SIZE + sampleOffset;
+
+    return static_cast<double>(totalSamples) / sfinfo.samplerate;
+}
+
+void MP3Player::updateStreamPosition() {
+    streamPosition += BUFFER_SIZE;
+}
+
+void MP3Player::seekToPosition(double seconds) {
+    if (!streamFile) return;
+
+    // Calculate frame position
+    sf_count_t framePos = static_cast<sf_count_t>(seconds * sfinfo.samplerate);
+
+    // Ensure position is within bounds
+    framePos = std::clamp(framePos, static_cast<sf_count_t>(0), totalFrames);
+
+    // Stop playback and clear existing buffers
+    alSourceStop(source);
+
+    // Unqueue all buffers
+    ALint queued;
+    alGetSourcei(source, AL_BUFFERS_QUEUED, &queued);
+    std::vector<ALuint> unqueuedBuffers(queued);
+    if (queued > 0) {
+        alSourceUnqueueBuffers(source, queued, unqueuedBuffers.data());
+    }
+
+    // Seek to new position
+    sf_seek(streamFile, framePos, SEEK_SET);
+    streamPosition = framePos;
+
+    // Refill buffers from new position
+    for (ALuint buffer : streamBuffers) {
+        if (!streamChunk(buffer)) {
+            break;
+        }
+        alSourceQueueBuffers(source, 1, &buffer);
+    }
+
+    // Resume playback if it was playing before
+    if (isPlaying) {
+        alSourcePlay(source);
+    }
+
+    pausedTime = seconds;
+}
+
+void MP3Player::setCurrentTime(float percentage) {
+    if (!streamFile || percentage < 0.0f || percentage > 100.0f) return;
+
+    double targetTime = (percentage / 100.0f) * streamDuration;
+    seekToPosition(targetTime);
 }

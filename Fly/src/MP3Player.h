@@ -6,6 +6,8 @@
 #include <string>
 #include <memory>
 #include <filesystem>
+#include <sndfile.h>
+#include "AudioVisualizer.h"
 
 class MP3Player
 {
@@ -38,12 +40,30 @@ private:
     void cleanupOpenAL();
     void setupFilters();
     void updateFilters();
-    bool loadAudioFile(const std::string &filename);
 
     ALuint effectSlots[2];
     ALuint effects[2];
 
     std::vector<float> waveformData;
+
+    static const int NUM_BUFFERS = 4;
+    static const int BUFFER_SIZE = 16384; // 16KB chunks
+
+    SNDFILE* streamFile;
+    SF_INFO sfinfo;
+    std::vector<ALuint> streamBuffers;
+    bool streaming;
+
+    sf_count_t totalFrames;  // Total number of frames in the audio file
+    double streamDuration;   // Duration in seconds
+    sf_count_t streamPosition;   // Current position in seconds
+
+    void updateStream();
+    bool streamChunk(ALuint buffer);
+    void clearStreamBuffers();
+
+    AudioVisualizer visualizer;
+
 public:
     MP3Player();
     ~MP3Player();
@@ -74,11 +94,6 @@ public:
     bool getIsPlaying() const;
     std::string getCurrentTrack() const;
 
-    // Get duration and current time in seconds
-    double getDuration() const;
-    double getCurrentTime() const;
-    void setCurrentTime(float percentage);
-
     const std::vector<std::string> &getPlaylist() const;
     const char *getFilePath() const;
     void setFilePath(const char *path);
@@ -87,5 +102,14 @@ public:
     float getPitch() const;
 
     std::vector<float> getWaveformData() const;
-    void processWaveformData(const std::vector<int16_t>& pcmData, int channels);
+
+    void update();
+
+    double getCurrentTime() const;
+    void updateStreamPosition();
+    double getDuration() const;
+    void setCurrentTime(float percentage);
+    void seekToPosition(double seconds);
+
+    const std::vector<float>& getVisualizerData() const { return visualizer.getVisualizerData(); }
 };
