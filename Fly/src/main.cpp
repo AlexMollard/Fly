@@ -7,7 +7,7 @@ int main(int, char**)
     HelloImGui::RunnerParams params;
 
     // Window configuration
-    params.appWindowParams.windowTitle = "Modern MP3 Player";
+    params.appWindowParams.windowTitle = "Fly Player";
     params.appWindowParams.windowGeometry.size = { 900, 600 };
     params.appWindowParams.windowGeometry.sizeAuto = false;
 

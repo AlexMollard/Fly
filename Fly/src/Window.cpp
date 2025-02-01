@@ -143,6 +143,10 @@ void Window::RenderPlaylistPanel() {
 	const auto& playlist = m_mp3Player->getPlaylist();
 	for (size_t i = 0; i < playlist.size(); i++) {
 		std::string filename = std::filesystem::path(playlist[i]).filename().string();
+		// Remove the file extension
+		filename = filename.substr(0, filename.find_last_of('.'));
+
+		// Selectable track
 		if (ImGui::Selectable(filename.c_str(), m_mp3Player->getCurrentTrack() == playlist[i])) {
 			m_mp3Player->loadTrack(playlist[i]);
 			m_mp3Player->play();
