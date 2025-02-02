@@ -1,18 +1,23 @@
 ﻿#include <filesystem>
 #include <hello_imgui/hello_imgui.h>
 #include <imgui.h>
+#include <iostream>
 #include <string>
 #include <string_view>
 #include <tchar.h>
 #include <windows.h>
 
+#include "util/Logger.h"
+#include "util/OutputDebugStream.h"
 #include "Window.h"
+
+// Global debug stream object
+static OutputDebugStream dbgout;
 
 constexpr std::string_view WINDOW_TITLE = "Fly Player";
 constexpr HelloImGui::ScreenSize WINDOW_SIZE{ 900, 600 };
 constexpr float BASE_FONT_SIZE = 16.0f;
 
-// Font configuration
 struct FontConfig
 {
 	std::string path;
@@ -32,6 +37,26 @@ bool LoadFont(const FontConfig& fontConfig, ImFontAtlas* fonts)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
+	LogFormatter::Initialize();
+
+	// Initialize with custom config
+	LogFormatter::LogConfig config;
+	config.showMilliseconds = true;
+	config.timeFormat = "%H:%M:%S";
+	config.useAnsiColors = true;
+	LogFormatter::SetConfig(config);
+
+	// Add a callback (e.g. I could use this in a imgui console window to display logs, but unsure if I want to)
+	//LogFormatter::AddLogCallback(
+	//        [](LogFormatter::LogLevel level, const std::string& msg)
+	//        {
+	//	        // Do something with the log message
+	//        });
+
+	// Redirect cout to Output Window
+	std::cout.rdbuf(dbgout.rdbuf());
+
+	// Initialize ImGui parameters
 	HelloImGui::RunnerParams params;
 
 	// Window configuration
@@ -44,7 +69,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	params.imGuiWindowParams.showMenuBar = false;
 	params.imGuiWindowParams.showStatusBar = false;
 
-	// Setup callbacks
+	// Setup font loading callback
 	params.callbacks.LoadAdditionalFonts = []()
 	{
 		const std::string resDir = IsDebuggerPresent() ? "../res/" : "";
@@ -64,10 +89,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 		FontConfig iconFont{ resDir + "lucide.ttf", BASE_FONT_SIZE, icons_ranges, &icons_config };
 
+		// Load fonts and handle errors
 		if (!LoadFont(regularFont, io.Fonts))
 		{
 			MessageBox(nullptr, _T("Failed to load regular font"), _T("Error"), MB_OK | MB_ICONERROR);
 		}
+
 		if (!LoadFont(iconFont, io.Fonts))
 		{
 			MessageBox(nullptr, _T("Failed to load icon font"), _T("Error"), MB_OK | MB_ICONERROR);
@@ -89,6 +116,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		}
 	};
 
+	// Run the application
 	HelloImGui::Run(params);
 	return 0;
 }

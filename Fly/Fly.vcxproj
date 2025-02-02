@@ -89,6 +89,8 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\util\OutputDebugStream.cpp" />
+    <ClCompile Include="src\util\LogFormatter.cpp" />
     <ClCompile Include="src\AudioVisualizer.cpp" />
     <ClCompile Include="src/FileDialog.cpp" />
     <ClCompile Include="src/main.cpp" />
@@ -96,6 +98,9 @@
     <ClCompile Include="src/Window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\util\OutputDebugStream.h" />
+    <ClInclude Include="src\util\Logger.h" />
+    <ClInclude Include="src\util\LogFormatter.h" />
     <ClInclude Include="src\AudioVisualizer.h" />
     <ClInclude Include="src/FileDialog.h" />
     <ClInclude Include="src/IconsLucide.h" />
