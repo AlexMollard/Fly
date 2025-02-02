@@ -1,66 +1,104 @@
-# ImGui MP3 Player
+# Fly Player 🎵
 
-A modern, minimal MP3 player built with Dear ImGui and OpenAL. Features a clean, Gruvbox-themed interface with basic audio controls and filtering capabilities.
+A modern audio player built with C++ featuring real-time audio visualization, spatial audio, and advanced audio effects.
 
-![alt text](res/screenshot.png)
+<div style="display: flex; align-items: center;">
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg">
+  <span>&nbsp;&nbsp;</span>
+  <img src="https://img.shields.io/badge/C%2B%2B-20-blue.svg">
+   <span>&nbsp;&nbsp;</span>
+  <img src="https://img.shields.io/badge/platform-Windows-lightgrey.svg">
+</div>
+
+![Fly Player](res/screenshot.png)
 
 ## Features
 
-- Clean, modern Gruvbox-themed interface
-- Basic playback controls (play, pause, stop, next, previous)
-- Volume control with visual feedback
-- Bass and treble adjustment
-- Playlist management
-- File browser for easy track selection
-- Progress bar with time display
-- Shuffle and repeat modes
+### Core Audio Features
+- 🎵 Support for multiple audio formats (MP3, WAV, FLAC, etc.)
+- 📊 Real-time audio visualization with frequency analysis
+- 🔊 Spatial audio positioning with 3D sound placement
+- 🎛️ Advanced audio effects:
+  - Bass and treble control
+  - Pitch shifting
+  - Volume normalization
+  - Fun presets (Chipmunk mode, Slowed mode)
+
+### Playback Controls
+- 🎯 Precise seek control with interactive progress bar
+- 🔄 Repeat and shuffle modes
+- 📝 Playlist management
+- ⏯️ Basic controls (play, pause, stop, next, previous)
+
+### User Interface
+- 🎨 Modern, clean interface using Dear ImGui
+- 📱 Responsive layout
+- 🌈 Real-time audio visualization with peak indicators
+- 🎮 Interactive spatial audio control panel
+- 📁 Built-in file browser
+
+### Audio Engine Features
+- 🎧 High-quality audio processing using OpenAL-Soft
+- 🔄 Real-time audio streaming
+- 🧮 FFT-based audio analysis
+- 💫 Smooth audio transitions
+
+## Requirements
+
+- Windows 10/11
+- Visual Studio 2022
+- vcpkg package manager
+- C++20 or later
 
 ## Dependencies
 
-- Dear ImGui
-- OpenAL Soft
-- hello_imgui
-- Lucide Icons
-
-### Plan:
-1. Remove unnecessary filepath comment
-2. Fix markdown formatting for numbered list
-3. Improve section heading structure
-4. Clean up code block formatting
-5. Add integration instructions for vcpkg
+- Dear ImGui (with docking branch, this will also be installed along hello-imgui)
+- OpenAL-Soft
+- libsndfile
+- Hello-ImGui
 
 ## Building
 
-### 1. Clone the repository
+1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/imgui-mp3-player.git
-cd imgui-mp3-player
+git clone https://github.com/AlexMollard/Fly
+cd Fly
 ```
 
-### 2. Install dependencies
-Install dependencies using vcpkg package manager:
+2. Install vcpkg if you haven't already:
 ```bash
-vcpkg install openal-soft
-vcpkg install "hello-imgui[opengl3-binding,glfw-binding]"
+git clone https://github.com/microsoft/vcpkg.git
+cd vcpkg
+.\bootstrap-vcpkg.bat
+```
+3. Integrate vcpkg with Visual Studio:
+```bash
+.\vcpkg integrate install
 ```
 
-### 3. Build the project
-1. Open the solution file in Visual Studio:
-   ```bash
-   start imgui-mp3-player.sln
-   ```
-2. Select your preferred configuration (Debug/Release)
-3. Build the project (F7 or Build > Build Solution)
-4. Ensure the working directory is set to the project directory
+4. Open `Fly.sln` in Visual Studio 2022
 
-Note: Make sure vcpkg is integrated with Visual Studio. Run:
-```bash
-vcpkg integrate install
-```
+4. Build the solution (F5)
+**Note**: The first build may take a while as vcpkg downloads and builds the dependencies for you.
 
 ## Usage
 
 1. Launch the application
-2. Click "Open File" to add music to your playlist
-3. Use the playback controls to control your music
-4. Adjust volume, bass, and treble using the sliders
+2. Click the "+" button to add audio files
+3. Use the playback controls to manage your music
+4. Experiment with audio effects and spatial positioning
+5. Enjoy the real-time visualization!
+
+## Audio Controls
+
+- **Volume**: Adjust the overall playback volume
+- **Bass**: Control low-frequency response (50Hz - 2000Hz)
+- **Treble**: Control high-frequency response (2000Hz - 20000Hz)
+- **Pitch**: Adjust playback speed while maintaining pitch
+- **Spatial Audio**: Position the audio source in 3D space
+
+## Acknowledgments
+
+- OpenAL-Soft team for the audio engine
+- Dear ImGui team for the GUI framework
+- libsndfile team for audio file handling
