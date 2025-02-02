@@ -24,9 +24,6 @@ void Window::Render()
 	RenderPlaylistPanel();
 	ImGui::SameLine();
 	ImGui::SetCursorPosY(ImGui::GetStyle().WindowPadding.y);
-	RenderControlsPanel();
-
-	// Show file dialog
 	if (m_show_file_dialog)
 	{
 		m_dialog.Render();
@@ -36,6 +33,10 @@ void Window::Render()
 			m_mp3Player->play();
 			m_selected_file.clear();
 		}
+	}
+	else
+	{
+		RenderControlsPanel();
 	}
 
 	ImGui::End();
