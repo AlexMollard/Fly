@@ -1,19 +1,22 @@
 #pragma once
 
 #define IMGUI_DEFINE_MATH_OPERATORS
+#include <filesystem>
 #include <imgui.h>
 #include <memory>
 #include <string>
-#include <filesystem>
+
+#include "FileDialog.h"
 #include "IconsLucide.h"
 #include "MP3Player.h"
-#include "FileDialog.h"
 
-namespace HelloImGui {
+namespace HelloImGui
+{
 	struct RunnerParams;
 }
 
-class Window {
+class Window
+{
 public:
 	Window(HelloImGui::RunnerParams& params);
 
@@ -33,7 +36,7 @@ private:
 	void RenderAudioFilters();
 	void RenderVisualizer();
 
-	std::string FormatTime(float seconds);
+	std::string FormatTime(double seconds);
 
 private:
 	std::unique_ptr<MP3Player> m_mp3Player;

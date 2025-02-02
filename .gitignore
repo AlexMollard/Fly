@@ -99,3 +99,6 @@ scripts/
 # vcpkg
 vcpkg_installed/
 vcpkg/
+
+# imgui
+Fly_Player.ini

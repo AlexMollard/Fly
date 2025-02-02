@@ -2,114 +2,118 @@
 
 #include <AL/al.h>
 #include <AL/alc.h>
-#include <vector>
-#include <string>
-#include <memory>
 #include <filesystem>
+#include <memory>
 #include <sndfile.h>
+#include <string>
+#include <vector>
+
 #include "AudioVisualizer.h"
 
 class MP3Player
 {
 private:
-    ALCdevice *device;
-    ALCcontext *context;
-    ALuint source;
-    ALuint buffer;
-    std::vector<ALuint> buffers;
+	ALCdevice* device;
+	ALCcontext* context;
+	ALuint source;
+	ALuint buffer;
+	std::vector<ALuint> buffers;
 
-    bool isPlaying;
-    float volume;
-    float bass;
-    float treble;
-    std::string currentTrack;
-    char filepath[256];
-    double pausedTime = 0;
+	bool isPlaying;
+	float volume;
+	float bass;
+	float treble;
+	std::string currentTrack;
+	char filepath[256];
+	double pausedTime = 0;
 
-    std::vector<std::string> playlist;
-    size_t currentTrackIndex;
-    bool repeat;
-    bool shuffle;
+	std::vector<std::string> playlist;
+	size_t currentTrackIndex;
+	bool repeat;
+	bool shuffle;
 
-    ALuint lowpassFilter;  // For bass control
-    ALuint highpassFilter; // For treble control
-    ALuint pitchEffect;    // For pitch shifting
-    float pitch;
+	ALuint lowpassFilter;  // For bass control
+	ALuint highpassFilter; // For treble control
+	ALuint pitchEffect;    // For pitch shifting
+	float pitch;
 
-    void initializeOpenAL();
-    void cleanupOpenAL();
-    void setupFilters();
-    void updateFilters();
+	void initializeOpenAL();
+	void cleanupOpenAL();
+	void setupFilters();
+	void updateFilters();
 
-    ALuint effectSlots[2];
-    ALuint effects[2];
+	ALuint effectSlots[2];
+	ALuint effects[2];
 
-    std::vector<float> waveformData;
+	std::vector<float> waveformData;
 
-    static const int NUM_BUFFERS = 4;
-    static const int BUFFER_SIZE = 16384; // 16KB chunks
+	static const int NUM_BUFFERS = 4;
+	static const int BUFFER_SIZE = 16384; // 16KB chunks
 
-    SNDFILE* streamFile;
-    SF_INFO sfinfo;
-    std::vector<ALuint> streamBuffers;
-    bool streaming;
+	SNDFILE* streamFile;
+	SF_INFO sfinfo;
+	std::vector<ALuint> streamBuffers;
+	bool streaming;
 
-    sf_count_t totalFrames;  // Total number of frames in the audio file
-    double streamDuration;   // Duration in seconds
-    sf_count_t streamPosition;   // Current position in seconds
+	sf_count_t totalFrames;    // Total number of frames in the audio file
+	double streamDuration;     // Duration in seconds
+	sf_count_t streamPosition; // Current position in seconds
 
-    void updateStream();
-    bool streamChunk(ALuint buffer);
-    void clearStreamBuffers();
+	void updateStream();
+	bool streamChunk(ALuint buffer);
+	void clearStreamBuffers();
 
-    AudioVisualizer visualizer;
+	AudioVisualizer visualizer;
 
 public:
-    MP3Player();
-    ~MP3Player();
+	MP3Player();
+	~MP3Player();
 
-    bool loadTrack(const std::string &filename);
-    void playNext();
-    void playPrevious();
-    void clearPlaylist();
-    void removeTrack(size_t index);
+	bool loadTrack(const std::string& filename);
+	void playNext();
+	void playPrevious();
+	void clearPlaylist();
+	void removeTrack(size_t index);
 
-    void toggleRepeat();
-    void toggleShuffle();
-    bool isRepeatEnabled() const;
-    bool isShuffleEnabled() const;
+	void toggleRepeat();
+	void toggleShuffle();
+	bool isRepeatEnabled() const;
+	bool isShuffleEnabled() const;
 
-    void play();
-    void pause();
-    void stop();
+	void play();
+	void pause();
+	void stop();
 
-    void setVolume(float newVolume);
-    float getVolume() const;
+	void setVolume(float newVolume);
+	float getVolume() const;
 
-    void setBass(float value);
-    void setTreble(float value);
-    float getBass() const;
-    float getTreble() const;
+	void setBass(float value);
+	void setTreble(float value);
+	float getBass() const;
+	float getTreble() const;
 
-    bool getIsPlaying() const;
-    std::string getCurrentTrack() const;
+	bool getIsPlaying() const;
+	std::string getCurrentTrack() const;
 
-    const std::vector<std::string> &getPlaylist() const;
-    const char *getFilePath() const;
-    void setFilePath(const char *path);
-    
-    void setPitch(float newPitch);
-    float getPitch() const;
+	const std::vector<std::string>& getPlaylist() const;
+	const char* getFilePath() const;
+	void setFilePath(const char* path);
 
-    std::vector<float> getWaveformData() const;
+	void setPitch(float newPitch);
+	float getPitch() const;
 
-    void update();
+	std::vector<float> getWaveformData() const;
 
-    double getCurrentTime() const;
-    void updateStreamPosition();
-    double getDuration() const;
-    void setCurrentTime(float percentage);
-    void seekToPosition(double seconds);
+	void update();
 
-    const std::vector<float>& getVisualizerData() const { return visualizer.getVisualizerData(); }
+	double getCurrentTime() const;
+	void updateStreamPosition();
+	double getDuration() const;
+	void setCurrentTime(float percentage);
+	void seekToPosition(double seconds);
+
+	const std::vector<float>& getVisualizerData() const
+	{
+		return visualizer.getVisualizerData();
+	}
 };

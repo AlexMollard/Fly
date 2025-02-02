@@ -1,11 +1,12 @@
 #pragma once
 
-#include <string>
-#include <vector>
-#include <unordered_map>
 #include <filesystem>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-class FileDialog {
+class FileDialog
+{
 private:
 	bool& m_show_dialog;
 	std::string& m_selected_file;
