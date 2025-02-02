@@ -201,6 +201,7 @@ void Window::RenderControlsPanel()
 	RenderPlaybackControls();
 	RenderVolumeControl();
 	RenderAudioFilters();
+	RenderSpatialControl();
 
 	ImGui::EndChild();
 }
@@ -511,4 +512,81 @@ void Window::RenderVisualizer()
 
 	ImGui::PopStyleVar();
 	ImGui::EndChild();
+}
+
+void Window::RenderSpatialControl()
+{
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
+
+	ImGui::Text(ICON_LC_MOVE_3D "  Spatial Audio Control");
+	ImGui::Spacing();
+
+	// Calculate available space
+	ImVec2 availSpace = ImGui::GetContentRegionAvail();
+	float gridSize = min(availSpace.x, 200.0f); // Cap at 200px
+
+	// Create a child window for the 2D grid
+	ImGui::BeginChild("SpatialGrid", ImVec2(gridSize, gridSize));
+
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+	ImVec2 canvasSize(gridSize, gridSize);
+
+	// Draw grid background
+	drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(40, 40, 40, 255));
+
+	// Draw grid lines
+	for (int i = 1; i < 4; i++)
+	{
+		float linePos = i * (canvasSize.x / 4);
+		// Vertical lines
+		drawList->AddLine(ImVec2(canvasPos.x + linePos, canvasPos.y), ImVec2(canvasPos.x + linePos, canvasPos.y + canvasSize.y), IM_COL32(70, 70, 70, 255));
+		// Horizontal lines
+		drawList->AddLine(ImVec2(canvasPos.x, canvasPos.y + linePos), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + linePos), IM_COL32(70, 70, 70, 255));
+	}
+
+	// Get current positions
+	auto sourcePos = m_mp3Player->getPosition();
+	auto listenerPos = m_mp3Player->getListenerPosition();
+
+	// Convert from OpenAL coordinates (-1 to 1) to screen coordinates
+	ImVec2 sourceScreenPos(canvasPos.x + (sourcePos.first + 1.0f) * 0.5f * canvasSize.x, canvasPos.y + (sourcePos.second + 1.0f) * 0.5f * canvasSize.y);
+	ImVec2 listenerScreenPos(canvasPos.x + (listenerPos.first + 1.0f) * 0.5f * canvasSize.x, canvasPos.y + (listenerPos.second + 1.0f) * 0.5f * canvasSize.y);
+
+	// Draw source point (orange)
+	drawList->AddCircleFilled(sourceScreenPos, 6.0f, IM_COL32(255, 128, 0, 255));
+	drawList->AddText(ImVec2(sourceScreenPos.x + 10, sourceScreenPos.y - 10), IM_COL32(255, 128, 0, 255), "Source");
+
+	// Draw listener point (white)
+	drawList->AddCircleFilled(listenerScreenPos, 6.0f, IM_COL32(255, 255, 255, 255));
+	drawList->AddText(ImVec2(listenerScreenPos.x + 10, listenerScreenPos.y - 10), IM_COL32(255, 255, 255, 255), "Listener");
+
+	// Handle dragging
+	ImGui::InvisibleButton("canvas", canvasSize);
+	if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0))
+	{
+		ImVec2 mousePos = ImGui::GetMousePos();
+		ImVec2 relativePos((mousePos.x - canvasPos.x) / canvasSize.x, (mousePos.y - canvasPos.y) / canvasSize.y);
+
+		// Convert to OpenAL coordinates (-1 to 1)
+		float x = (relativePos.x * 2.0f - 1.0f);
+		float z = (relativePos.y * 2.0f - 1.0f);
+
+		auto LengthSqr = [](const ImVec2& v) { return v.x * v.x + v.y * v.y; };
+
+		// Update either source or listener position based on which is closer to the mouse
+		float distToSource = LengthSqr(ImVec2(mousePos.x - sourceScreenPos.x, mousePos.y - sourceScreenPos.y));
+
+		m_mp3Player->setPosition(x, z);
+	}
+
+	ImGui::EndChild();
+
+	// Add a reset button
+	if (ImGui::Button("Reset Positions", ImVec2(-1, 0)))
+	{
+		m_mp3Player->setPosition(0.0f, 0.0f);
+	}
 }

@@ -2,8 +2,6 @@
 
 #include "AudioVisualizer.h"
 
-#define M_PI 3.14159265358979323846f
-
 AudioVisualizer::AudioVisualizer()
       : ringBuffer(RING_BUFFER_SIZE), visualizerData(NUM_BANDS), bandPeaks(NUM_BANDS), bandDecay(NUM_BANDS), prevMagnitudes(NUM_BANDS), lastUpdateTime(std::chrono::steady_clock::now())
 {

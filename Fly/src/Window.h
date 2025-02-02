@@ -29,6 +29,7 @@ private:
 	void RenderVolumeControl();
 	void RenderAudioFilters();
 	void RenderVisualizer();
+	void RenderSpatialControl();
 
 	std::string FormatTime(double seconds);
 

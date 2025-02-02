@@ -1,8 +1,10 @@
-#include "pch.h"
+﻿#include "pch.h"
 
 #include "MP3Player.h"
 
+#include <AL/alext.h>
 #include <AL/efx.h>
+
 
 static LPALDELETEFILTERS alDeleteFilters;
 static LPALDELETEEFFECTS alDeleteEffects;
@@ -16,6 +18,8 @@ static LPALGENFILTERS alGenFilters;
 static LPALGENEFFECTS alGenEffects;
 static LPALGENAUXILIARYEFFECTSLOTS alGenAuxiliaryEffectSlots;
 static LPALAUXILIARYEFFECTSLOTI alAuxiliaryEffectSloti;
+
+static LPALCRESETDEVICESOFT alcResetDeviceSOFT;
 
 MP3Player::MP3Player()
       : isPlaying(false), volume(40.0f), bass(100.0f), treble(0.0f), pitch(50.0f), currentTrackIndex(0), repeat(false), shuffle(false)
@@ -45,15 +49,24 @@ void MP3Player::initializeOpenAL()
 
 	// Set device parameters
 	ALCint attrs[] = { ALC_FREQUENCY,
-		48000, // Match device sample rate
+		48000,
 		ALC_REFRESH,
 		refresh,
 		ALC_SYNC,
-		AL_TRUE, // Enable sync for better timing
+		AL_TRUE,
 		ALC_MONO_SOURCES,
 		4,
 		ALC_STEREO_SOURCES,
 		2,
+		ALC_MAX_AUXILIARY_SENDS,
+		4,
+		// Force stereo output
+		ALC_STEREO_SOURCES,
+		2,
+		ALC_OUTPUT_MODE_SOFT,
+		ALC_STEREO_HRTF_SOFT, // Add this
+		ALC_HRTF_SOFT,
+		ALC_TRUE,
 		0 };
 
 	context = alcCreateContext(device, attrs);
@@ -71,6 +84,12 @@ void MP3Player::initializeOpenAL()
 	}
 
 	// Load EFX functions
+	alcResetDeviceSOFT = (LPALCRESETDEVICESOFT) alcGetProcAddress(nullptr, "alcResetDeviceSOFT");
+	if (!alcResetDeviceSOFT)
+	{
+		throw std::runtime_error("ALC_SOFT_reset_device not supported");
+	}
+
 	alDeleteFilters = (LPALDELETEFILTERS) alGetProcAddress("alDeleteFilters");
 	if (!alDeleteFilters)
 	{
@@ -139,12 +158,40 @@ void MP3Player::initializeOpenAL()
 
 	alGenSources(1, &source);
 
+	ALCint hrtf_status;
+	alcGetIntegerv(device, ALC_HRTF_STATUS_SOFT, 1, &hrtf_status);
+
+	if (hrtf_status == ALC_HRTF_ENABLED_SOFT)
+	{
+		const ALchar* hrtf_name = alcGetString(device, ALC_HRTF_SPECIFIER_SOFT);
+		LOG_INFO("HRTF is enabled using: {}", hrtf_name ? hrtf_name : "unknown");
+	}
+	else
+	{
+		LOG_WARN("HRTF is not enabled");
+	}
+
 	// Set initial source properties with error checking
-	alSourcef(source, AL_PITCH, 1.0f);
-	alSourcef(source, AL_GAIN, volume / 100.0f);
-	alSource3f(source, AL_POSITION, 0.0f, 0.0f, 0.0f);
-	alSource3f(source, AL_VELOCITY, 0.0f, 0.0f, 0.0f);
-	alSourcei(source, AL_LOOPING, AL_FALSE);
+	alSourcei(source, AL_SOURCE_RELATIVE, AL_FALSE);       // World-space positioning
+	alSourcei(source, AL_SOURCE_SPATIALIZE_SOFT, AL_TRUE); // Enable spatization
+	alSourcef(source, AL_CONE_INNER_ANGLE, 360.0f);
+	alSourcef(source, AL_CONE_OUTER_ANGLE, 360.0f);
+
+	alSpeedOfSound(343.3f); // Speed of sound in m/s
+	alDopplerFactor(1.0f);  // Realistic doppler effect
+	alDistanceModel(AL_LINEAR_DISTANCE_CLAMPED);
+
+	// Initialize listener position and orientation
+	float listenerPos[3] = { 0.0f, 0.0f, 0.0f };
+	float listenerOri[6] = { 0.0f,
+		0.0f,
+		-1.0f, // Forward vector
+		0.0f,
+		1.0f,
+		0.0f }; // Up vector
+	alListenerfv(AL_POSITION, listenerPos);
+	alListenerfv(AL_ORIENTATION, listenerOri);
+	alListenerf(AL_GAIN, 1.0f);
 
 	// Check for errors
 	ALenum error = alGetError();
@@ -236,6 +283,14 @@ bool MP3Player::loadTrack(const std::string& filename)
 
 	currentTrack = filename;
 	streaming = true;
+
+	// After generating buffers and before queuing them:
+	alSourcei(source, AL_SOURCE_RELATIVE, AL_FALSE);
+	alSourcei(source, AL_SOURCE_SPATIALIZE_SOFT, AL_TRUE);
+
+	// Create initial position
+	float position[3] = { positionX, 0.0f, positionZ };
+	alSourcefv(source, AL_POSITION, position);
 
 	// Add to playlist if not already present
 	if (std::find(playlist.begin(), playlist.end(), filename) == playlist.end())
@@ -559,7 +614,7 @@ bool MP3Player::streamChunk(ALuint buffer)
 				float sample = floatData[i * sfinfo.channels + ch];
 
 				// Apply soft limiting to prevent clipping
-				sample = std::tanh(sample); // Soft clip at �1.0
+				sample = std::tanh(sample); // Soft clip at ±1.0
 
 				// Convert to 16-bit with proper scaling
 				stereoData[i * 2 + ch] = static_cast<int16_t>(std::clamp(sample * 32767.0f, -32767.0f, 32767.0f));
@@ -684,4 +739,51 @@ void MP3Player::setCurrentTime(float percentage)
 
 	double targetTime = (percentage / 100.0f) * streamDuration;
 	seekToPosition(targetTime);
+}
+
+void MP3Player::setPosition(float x, float z)
+{
+	positionX = x;
+	positionZ = z;
+
+	// Create a proper position vector (x, y, z)
+	float position[3] = { x, 0.0f, z }; // y = 0 for 2D positioning
+	alSourcefv(source, AL_POSITION, position);
+
+	alSourcef(source, AL_MAX_DISTANCE, 1000.0f);
+	alSourcef(source, AL_REFERENCE_DISTANCE, 1.0f);
+	alSourcef(source, AL_ROLLOFF_FACTOR, 1.0f);
+
+	alDistanceModel(AL_LINEAR_DISTANCE_CLAMPED);
+}
+
+void MP3Player::setListenerPosition(float x, float z)
+{
+	listenerX = x;
+	listenerZ = z;
+
+	// Create proper position vector
+	float position[3] = { x, 0.0f, z };
+	alListenerfv(AL_POSITION, position);
+
+	// Forward vector (-z) and Up vector (+y) for orientation
+	float orientation[6] = {
+		0.0f,
+		0.0f,
+		-1.0f, // Forward vector
+		0.0f,
+		1.0f,
+		0.0f // Up vector
+	};
+	alListenerfv(AL_ORIENTATION, orientation);
+}
+
+std::pair<float, float> MP3Player::getListenerPosition() const
+{
+	return { listenerX, listenerZ };
+}
+
+std::pair<float, float> MP3Player::getPosition() const
+{
+	return { positionX, positionZ };
 }

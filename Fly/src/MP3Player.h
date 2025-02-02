@@ -41,6 +41,8 @@ private:
 	ALuint effectSlots[2];
 	ALuint effects[2];
 
+	ALuint directFilters[2]; // Left and right filters
+
 	std::vector<float> waveformData;
 
 	static const int NUM_BUFFERS = 4;
@@ -55,6 +57,11 @@ private:
 	double streamDuration;     // Duration in seconds
 	sf_count_t streamPosition; // Current position in seconds
 
+	float positionX = 0.0f;
+	float positionZ = 0.0f;
+	float listenerX = 0.0f;
+	float listenerZ = 0.0f;
+
 	void updateStream();
 	bool streamChunk(ALuint buffer);
 	void clearStreamBuffers();
@@ -64,6 +71,12 @@ private:
 public:
 	MP3Player();
 	~MP3Player();
+
+	void setPosition(float x, float z);
+	std::pair<float, float> getPosition() const;
+	void setListenerPosition(float x, float z);
+	std::pair<float, float> getListenerPosition() const;
+
 
 	bool loadTrack(const std::string& filename);
 	void playNext();
