@@ -38,4 +38,11 @@ private:
 	bool m_show_file_dialog;
 	std::string m_selected_file;
 	FileDialog m_dialog;
+
+	// Spatial audio animation state
+    bool m_isRotating = false;
+    bool m_isFigure8 = false;
+    float m_rotationStartTime = 0.0f;
+    float m_figure8StartTime = 0.0f;
+    float m_lastRotationAngle = 0.0f;
 };

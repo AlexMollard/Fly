@@ -525,7 +525,13 @@ void Window::RenderSpatialControl()
 
 	// Calculate available space
 	ImVec2 availSpace = ImGui::GetContentRegionAvail();
-	float gridSize = min(availSpace.x, 200.0f); // Cap at 200px
+	float gridSize = min(availSpace.x * 0.6f, 200.0f); // Take 60% of width, cap at 200px
+
+	// Create a horizontal layout
+	ImGui::Columns(2, "SpatialControlLayout", false);
+
+	// Left column: Grid
+	ImGui::SetColumnWidth(0, gridSize + ImGui::GetStyle().ItemSpacing.x);
 
 	// Create a child window for the 2D grid
 	ImGui::BeginChild("SpatialGrid", ImVec2(gridSize, gridSize));
@@ -570,23 +576,81 @@ void Window::RenderSpatialControl()
 		ImVec2 mousePos = ImGui::GetMousePos();
 		ImVec2 relativePos((mousePos.x - canvasPos.x) / canvasSize.x, (mousePos.y - canvasPos.y) / canvasSize.y);
 
-		// Convert to OpenAL coordinates (-1 to 1)
 		float x = (relativePos.x * 2.0f - 1.0f);
 		float z = (relativePos.y * 2.0f - 1.0f);
-
-		auto LengthSqr = [](const ImVec2& v) { return v.x * v.x + v.y * v.y; };
-
-		// Update either source or listener position based on which is closer to the mouse
-		float distToSource = LengthSqr(ImVec2(mousePos.x - sourceScreenPos.x, mousePos.y - sourceScreenPos.y));
 
 		m_mp3Player->setPosition(x, z);
 	}
 
 	ImGui::EndChild();
 
-	// Add a reset button
-	if (ImGui::Button("Reset Positions", ImVec2(-1, 0)))
+	// Right column: Movement controls
+	ImGui::NextColumn();
+
+	ImGui::Text("Movement Patterns");
+	ImGui::Spacing();
+
+	// Calculate button width based on available space in the right column
+	float buttonWidth = ImGui::GetColumnWidth() - ImGui::GetStyle().ItemSpacing.x * 2;
+	float buttonHeight = 35.0f;
+
+	// Stack buttons vertically
+	if (ImGui::Button((ICON_LC_ROTATE_3D "  Rotate"), ImVec2(buttonWidth, buttonHeight)))
+	{
+		m_isRotating = !m_isRotating;
+		if (m_isRotating)
+		{
+			m_rotationStartTime = static_cast<float>(ImGui::GetTime());
+			m_lastRotationAngle = 0.0f;
+		}
+	}
+
+	ImGui::Spacing();
+
+	if (ImGui::Button((ICON_LC_INFINITY "  Figure-8"), ImVec2(buttonWidth, buttonHeight)))
+	{
+		m_isFigure8 = !m_isFigure8;
+		if (m_isFigure8)
+		{
+			m_figure8StartTime = static_cast<float>(ImGui::GetTime());
+			m_isRotating = false;
+		}
+	}
+
+	ImGui::Spacing();
+
+	if (ImGui::Button((ICON_LC_UNDO_2 "  Reset"), ImVec2(buttonWidth, buttonHeight)))
 	{
 		m_mp3Player->setPosition(0.0f, 0.0f);
+		m_isRotating = false;
+		m_isFigure8 = false;
+	}
+
+	ImGui::Columns(1);
+
+	// Update positions based on animations
+	if (m_isRotating)
+	{
+		float currentTime = static_cast<float>(ImGui::GetTime());
+		float elapsedTime = currentTime - m_rotationStartTime;
+		float angle = elapsedTime * 1.0f;
+
+		float radius = 0.5f;
+		float x = radius * cos(angle);
+		float z = radius * sin(angle);
+
+		m_mp3Player->setPosition(x, z);
+		m_lastRotationAngle = angle;
+	}
+	else if (m_isFigure8)
+	{
+		float currentTime = static_cast<float>(ImGui::GetTime());
+		float t = (currentTime - m_figure8StartTime) * 0.5f;
+
+		float scale = 0.5f;
+		float x = scale * cos(t);
+		float z = scale * sin(2 * t) * 0.5f;
+
+		m_mp3Player->setPosition(x, z);
 	}
 }
