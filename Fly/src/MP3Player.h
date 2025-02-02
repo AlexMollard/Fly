@@ -112,4 +112,9 @@ public:
 	{
 		return visualizer.getVisualizerData();
 	}
+
+	const std::vector<float>& getBandPeaks() const
+	{
+		return visualizer.getBandPeaks();
+	}
 };

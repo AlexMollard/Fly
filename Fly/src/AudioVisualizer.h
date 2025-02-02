@@ -20,7 +20,7 @@ private:
 	// Mutex for thread safety
 	std::mutex bufferMutex;
 
-	static const int NUM_BANDS = 32;  // Number of frequency bands
+	static const int NUM_BANDS = 23;  // Number of frequency bands
 	static const int FFT_SIZE = 2048; // Size of FFT window
 
 	int currentSampleRate;
@@ -31,7 +31,7 @@ public:
 	AudioVisualizer();
 
 	// Called from audio streaming thread
-	void pushAudioData(const std::vector<int16_t>& buffer, int channels, int sampleRate);
+	void pushAudioData(const std::vector<float>& buffer, int channels, int sampleRate);
 
 	// Called from main/rendering thread
 	bool update();

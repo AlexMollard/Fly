@@ -17,63 +17,6 @@ static LPALGENEFFECTS alGenEffects;
 static LPALGENAUXILIARYEFFECTSLOTS alGenAuxiliaryEffectSlots;
 static LPALAUXILIARYEFFECTSLOTI alAuxiliaryEffectSloti;
 
-class AudioLimiter
-{
-private:
-	float threshold;
-	float releaseTime;
-	float currentGain;
-
-public:
-	AudioLimiter(float threshold = 0.9f, float releaseTime = 0.1f)
-	      : threshold(threshold), releaseTime(releaseTime), currentGain(1.0f)
-	{
-	}
-
-	void process(std::vector<int16_t>& samples, int channels, int sampleRate)
-	{
-		float releaseCoeff = exp(-1.0f / (releaseTime * sampleRate));
-
-		// Look ahead window for peak detection
-		const int lookAhead = 32;
-		std::vector<float> peaks(samples.size() / channels);
-
-		// Find peaks
-		for (size_t i = 0; i < samples.size(); i += channels)
-		{
-			float maxSample = 0.0f;
-			for (int ch = 0; ch < channels; ch++)
-			{
-				float sample = std::abs(samples[i + ch] / 32768.0f);
-				maxSample = max(maxSample, sample);
-			}
-			peaks[i / channels] = maxSample;
-		}
-
-		// Calculate gain reduction
-		for (size_t i = 0; i < samples.size(); i += channels)
-		{
-			float maxPeak = 0.0f;
-			// Look ahead for peaks
-			for (int j = 0; j < lookAhead && (i / channels + j) < peaks.size(); j++)
-			{
-				maxPeak = max(maxPeak, peaks[i / channels + j]);
-			}
-
-			float targetGain = (maxPeak > threshold) ? threshold / maxPeak : 1.0f;
-			currentGain = min(currentGain / releaseCoeff, targetGain);
-
-			// Apply gain
-			for (int ch = 0; ch < channels; ch++)
-			{
-				float sample = samples[i + ch] / 32768.0f;
-				sample *= currentGain;
-				samples[i + ch] = static_cast<int16_t>(std::clamp(sample * 32768.0f, -32768.0f, 32767.0f));
-			}
-		}
-	}
-};
-
 MP3Player::MP3Player()
       : isPlaying(false), volume(40.0f), bass(100.0f), treble(0.0f), pitch(50.0f), currentTrackIndex(0), repeat(false), shuffle(false)
 {
@@ -96,14 +39,17 @@ void MP3Player::initializeOpenAL()
 		throw std::runtime_error("Failed to open OpenAL device");
 	}
 
+	// Get device refresh rate
 	ALCint refresh;
 	alcGetIntegerv(device, ALC_REFRESH, 1, &refresh);
 
 	// Set device parameters
-	ALCint attrs[] = { ALC_REFRESH,
+	ALCint attrs[] = { ALC_FREQUENCY,
+		48000, // Match device sample rate
+		ALC_REFRESH,
 		refresh,
 		ALC_SYNC,
-		AL_FALSE, // Disable forced synchronization
+		AL_TRUE, // Enable sync for better timing
 		ALC_MONO_SOURCES,
 		4,
 		ALC_STEREO_SOURCES,
@@ -111,13 +57,18 @@ void MP3Player::initializeOpenAL()
 		0 };
 
 	context = alcCreateContext(device, attrs);
-	alcMakeContextCurrent(context);
 	if (!context)
 	{
 		alcCloseDevice(device);
 		throw std::runtime_error("Failed to create OpenAL context");
 	}
 	alcMakeContextCurrent(context);
+
+	// Check for float format support
+	if (!alIsExtensionPresent("AL_EXT_FLOAT32"))
+	{
+		throw std::runtime_error("OpenAL float32 format not supported");
+	}
 
 	// Load EFX functions
 	alDeleteFilters = (LPALDELETEFILTERS) alGetProcAddress("alDeleteFilters");
@@ -186,15 +137,21 @@ void MP3Player::initializeOpenAL()
 		throw std::runtime_error("EFX not supported: Could not load alAuxiliaryEffectSloti");
 	}
 
-	// Generate source
 	alGenSources(1, &source);
 
-	// Set initial source properties
+	// Set initial source properties with error checking
 	alSourcef(source, AL_PITCH, 1.0f);
 	alSourcef(source, AL_GAIN, volume / 100.0f);
 	alSource3f(source, AL_POSITION, 0.0f, 0.0f, 0.0f);
 	alSource3f(source, AL_VELOCITY, 0.0f, 0.0f, 0.0f);
 	alSourcei(source, AL_LOOPING, AL_FALSE);
+
+	// Check for errors
+	ALenum error = alGetError();
+	if (error != AL_NO_ERROR)
+	{
+		throw std::runtime_error("Error initializing OpenAL source");
+	}
 }
 
 void MP3Player::setupFilters()
@@ -585,23 +542,38 @@ void MP3Player::updateStream()
 
 bool MP3Player::streamChunk(ALuint buffer)
 {
-	std::vector<int16_t> data(BUFFER_SIZE * sfinfo.channels);
+	// Read as float
+	std::vector<float> floatData(BUFFER_SIZE * sfinfo.channels);
+	sf_count_t samplesRead = sf_readf_float(streamFile, floatData.data(), BUFFER_SIZE);
 
-	sf_count_t samplesRead = sf_readf_short(streamFile, data.data(), BUFFER_SIZE);
 	if (samplesRead > 0)
 	{
-		// Apply audio limiter
-		AudioLimiter limiter(0.95f, 0.05f);
-		limiter.process(data, sfinfo.channels, sfinfo.samplerate);
+		// Convert to 16-bit stereo
+		std::vector<int16_t> stereoData(samplesRead * 2, 0); // 2 channels
 
-		// Process audio data for visualization before queuing
-		visualizer.pushAudioData(data, sfinfo.channels, sfinfo.samplerate);
+		// Map input channels to stereo and convert to 16-bit
+		for (sf_count_t i = 0; i < samplesRead; i++)
+		{
+			for (int ch = 0; ch < min(sfinfo.channels, 2); ch++)
+			{
+				float sample = floatData[i * sfinfo.channels + ch];
 
-		// Update our stream position tracking
+				// Apply soft limiting to prevent clipping
+				sample = std::tanh(sample); // Soft clip at ±1.0
+
+				// Convert to 16-bit with proper scaling
+				stereoData[i * 2 + ch] = static_cast<int16_t>(std::clamp(sample * 32767.0f, -32767.0f, 32767.0f));
+			}
+		}
+
+		// Process audio data for visualization (use float data for better accuracy)
+		visualizer.pushAudioData(floatData, sfinfo.channels, sfinfo.samplerate);
+
+		// Update stream position tracking
 		updateStreamPosition();
 
 		// Queue the processed audio data
-		alBufferData(buffer, (sfinfo.channels == 1) ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16, data.data(), static_cast<ALsizei>(samplesRead * sfinfo.channels * sizeof(int16_t)), sfinfo.samplerate);
+		alBufferData(buffer, AL_FORMAT_STEREO16, stereoData.data(), static_cast<ALsizei>(samplesRead * 2 * sizeof(int16_t)), sfinfo.samplerate);
 
 		return true;
 	}

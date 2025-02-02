@@ -9,7 +9,7 @@ AudioVisualizer::AudioVisualizer()
 {
 }
 
-void AudioVisualizer::pushAudioData(const std::vector<int16_t>& buffer, int channels, int sampleRate)
+void AudioVisualizer::pushAudioData(const std::vector<float>& buffer, int channels, int sampleRate)
 {
 	std::lock_guard<std::mutex> lock(bufferMutex);
 	currentSampleRate = sampleRate;
@@ -20,9 +20,12 @@ void AudioVisualizer::pushAudioData(const std::vector<int16_t>& buffer, int chan
 		float sample = 0.0f;
 		for (int ch = 0; ch < channels; ch++)
 		{
-			sample += buffer[i + ch] / 32768.0f;
+			// No need to divide by 32768 since data is already in float format
+			sample += buffer[i + ch];
 		}
-		sample /= channels;
+		sample /= channels; // Average the channels
+
+		sample = std::tanh(sample * 1.5f); // Soft limiting with slight amplification
 
 		ringBuffer[writePos] = sample;
 		writePos = (writePos + 1) & (RING_BUFFER_SIZE - 1); // Wrap around
@@ -36,7 +39,6 @@ void AudioVisualizer::pushAudioData(const std::vector<int16_t>& buffer, int chan
 }
 
 // Called from main/rendering thread
-
 bool AudioVisualizer::update()
 {
 	auto now = std::chrono::steady_clock::now();
@@ -90,21 +92,28 @@ bool AudioVisualizer::update()
 void AudioVisualizer::processFFT(const std::vector<float>& samples)
 {
 	static const float RISE_SPEED = 0.7f;
-	static const float FALL_SPEED = 0.1f;
-	static const float PEAK_FALL_SPEED = 0.05f;
+	static const float FALL_SPEED = 0.15f;
+	static const float PEAK_FALL_SPEED = 0.08f;
 	static const float MIN_DB = -60.0f;
-	static const float MAX_DB = 0.0f;
+	static const float MAX_DB = -6.0f;
+
+	// Scale samples to -1.0 to 1.0 range (knowing max is around 0.60)
+	std::vector<float> normalizedSamples(samples.size());
+	const float scaleAdjust = 0.05f; // Scale factor to normalize to -1.0 to 1.0
+	for (size_t i = 0; i < samples.size(); i++)
+	{
+		normalizedSamples[i] = samples[i] * scaleAdjust;
+	}
 
 	// Perform FFT and get magnitudes
 	std::vector<float> rawMagnitudes;
-	performFFT(samples, rawMagnitudes);
-
-	// Process frequency bands (same as your existing code)
-	float minFreq = 20.0f;
-	float maxFreq = 20000.0f;
-	float sampleRate = 44100.0f; // You might want to make this configurable
+	performFFT(normalizedSamples, rawMagnitudes);
 
 	std::vector<float> newMagnitudes(NUM_BANDS, 0.0f);
+	float sampleRate = currentSampleRate > 0 ? currentSampleRate : 44100.0f;
+
+	float minFreq = 20.0f;
+	float maxFreq = 20000.0f;
 
 	for (int band = 0; band < NUM_BANDS; band++)
 	{
@@ -121,8 +130,12 @@ void AudioVisualizer::processFFT(const std::vector<float>& samples)
 		for (int bin = bin1; bin <= bin2; bin++)
 		{
 			float freq = bin * sampleRate / FFT_SIZE;
-			float weight = std::pow(freq / 1000.0f, 0.3f);
-			weight = std::clamp(weight, 0.2f, 3.0f);
+			// Very light frequency weighting
+			float weight = 1.0f;
+			if (freq < 100.0f)
+				weight = 1.1f; // Slight bass boost
+			if (freq > 10000.0f)
+				weight = 1.05f; // Slight treble boost
 
 			sum += rawMagnitudes[bin] * weight;
 			weightSum += weight;
@@ -130,10 +143,17 @@ void AudioVisualizer::processFFT(const std::vector<float>& samples)
 
 		float avgMagnitude = (weightSum > 0.0f) ? (sum / weightSum) : 0.0f;
 
+		// Dynamics processing
 		float db = 20.0f * std::log10(avgMagnitude + 1e-6f);
 		db = std::clamp(db, MIN_DB, MAX_DB);
-		float normalizedMag = (db - MIN_DB) / (MAX_DB - MIN_DB);
 
+		float normalizedMag = (db - MIN_DB) / (MAX_DB - MIN_DB);
+		// Apply a moderate compression curve
+		normalizedMag = std::pow(normalizedMag, 1.2f);
+		// Scale to leave headroom
+		normalizedMag *= 0.8f;
+
+		// Temporal smoothing
 		float delta = normalizedMag - prevMagnitudes[band];
 		if (delta > 0)
 		{
@@ -144,19 +164,21 @@ void AudioVisualizer::processFFT(const std::vector<float>& samples)
 			newMagnitudes[band] = prevMagnitudes[band] + delta * FALL_SPEED;
 		}
 
+		// Peak tracking
 		if (newMagnitudes[band] > bandPeaks[band])
 		{
 			bandPeaks[band] = newMagnitudes[band];
 		}
 		else
 		{
-			bandPeaks[band] = max(newMagnitudes[band], bandPeaks[band] - PEAK_FALL_SPEED);
+			bandPeaks[band] *= (1.0f - PEAK_FALL_SPEED);
 		}
+
+		// Final safety clamp
+		newMagnitudes[band] = std::clamp(newMagnitudes[band], 0.0f, 0.85f);
 	}
 
 	prevMagnitudes = newMagnitudes;
-
-	// Store results
 	visualizerData = newMagnitudes;
 }
 
