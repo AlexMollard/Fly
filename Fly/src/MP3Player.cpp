@@ -1,8 +1,8 @@
+#include "pch.h"
+
 #include "MP3Player.h"
 
 #include <AL/efx.h>
-#include <cmath>
-#include <complex>
 
 static LPALDELETEFILTERS alDeleteFilters;
 static LPALDELETEEFFECTS alDeleteEffects;
@@ -45,7 +45,7 @@ public:
 			for (int ch = 0; ch < channels; ch++)
 			{
 				float sample = std::abs(samples[i + ch] / 32768.0f);
-				maxSample = std::max(maxSample, sample);
+				maxSample = max(maxSample, sample);
 			}
 			peaks[i / channels] = maxSample;
 		}
@@ -57,11 +57,11 @@ public:
 			// Look ahead for peaks
 			for (int j = 0; j < lookAhead && (i / channels + j) < peaks.size(); j++)
 			{
-				maxPeak = std::max(maxPeak, peaks[i / channels + j]);
+				maxPeak = max(maxPeak, peaks[i / channels + j]);
 			}
 
 			float targetGain = (maxPeak > threshold) ? threshold / maxPeak : 1.0f;
-			currentGain = std::min(currentGain / releaseCoeff, targetGain);
+			currentGain = min(currentGain / releaseCoeff, targetGain);
 
 			// Apply gain
 			for (int ch = 0; ch < channels; ch++)
@@ -286,6 +286,8 @@ bool MP3Player::loadTrack(const std::string& filename)
 		playlist.push_back(filename);
 		currentTrackIndex = playlist.size() - 1;
 	}
+
+	LOG_DEBUG("Loaded track: {}", filename);
 
 	return true;
 }

@@ -1,11 +1,5 @@
 #pragma once
 
-#define IMGUI_DEFINE_MATH_OPERATORS
-#include <filesystem>
-#include <imgui.h>
-#include <memory>
-#include <string>
-
 #include "FileDialog.h"
 #include "IconsLucide.h"
 #include "MP3Player.h"

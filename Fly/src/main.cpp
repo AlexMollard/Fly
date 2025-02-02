@@ -1,15 +1,9 @@
-﻿#include <filesystem>
-#include <hello_imgui/hello_imgui.h>
-#include <imgui.h>
-#include <iostream>
-#include <string>
-#include <string_view>
-#include <tchar.h>
-#include <windows.h>
+﻿#include "pch.h"
 
-#include "util/Logger.h"
+#include <hello_imgui/hello_imgui.h>
+
 #include "util/OutputDebugStream.h"
-#include "Window.h"
+#include "Window.h" 
 
 // Global debug stream object
 static OutputDebugStream dbgout;

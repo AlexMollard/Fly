@@ -1,12 +1,8 @@
+#include "pch.h"
+
 #include "FileDialog.h"
 
-#include <imgui.h>
-
 #include "IconsLucide.h"
-#ifdef _WIN32
-#	define WIN32_LEAN_AND_MEAN
-#	include <Windows.h>
-#endif
 
 void FileDialog::InitializeIcons()
 {

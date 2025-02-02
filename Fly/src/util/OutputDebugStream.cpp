@@ -1,3 +1,5 @@
+#include "pch.h"
+
 #include "OutputDebugStream.h"
 
 std::streambuf::int_type OutputDebugStringBuf::overflow(int_type c)

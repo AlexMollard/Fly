@@ -55,6 +55,9 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <TreatWarningAsError>true</TreatWarningAsError>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>src</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -76,6 +79,10 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>src</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -89,23 +96,27 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\pch.cpp">
+      <PrecompiledHeader>Create</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="src\util\OutputDebugStream.cpp" />
     <ClCompile Include="src\util\LogFormatter.cpp" />
     <ClCompile Include="src\AudioVisualizer.cpp" />
-    <ClCompile Include="src/FileDialog.cpp" />
-    <ClCompile Include="src/main.cpp" />
-    <ClCompile Include="src/MP3Player.cpp" />
-    <ClCompile Include="src/Window.cpp" />
+    <ClCompile Include="src\FileDialog.cpp" />
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\MP3Player.cpp" />
+    <ClCompile Include="src\Window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\util\OutputDebugStream.h" />
     <ClInclude Include="src\util\Logger.h" />
     <ClInclude Include="src\util\LogFormatter.h" />
     <ClInclude Include="src\AudioVisualizer.h" />
-    <ClInclude Include="src/FileDialog.h" />
-    <ClInclude Include="src/IconsLucide.h" />
-    <ClInclude Include="src/MP3Player.h" />
-    <ClInclude Include="src/Window.h" />
+    <ClInclude Include="src\FileDialog.h" />
+    <ClInclude Include="src\IconsLucide.h" />
+    <ClInclude Include="src\MP3Player.h" />
+    <ClInclude Include="src\Window.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="vcpkg.json" />

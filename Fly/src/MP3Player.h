@@ -2,11 +2,7 @@
 
 #include <AL/al.h>
 #include <AL/alc.h>
-#include <filesystem>
-#include <memory>
 #include <sndfile.h>
-#include <string>
-#include <vector>
 
 #include "AudioVisualizer.h"
 

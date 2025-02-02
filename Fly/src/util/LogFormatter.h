@@ -1,11 +1,5 @@
 #pragma once
 
-#include <functional>
-#include <sstream>
-#include <string>
-#include <vector>
-#include <windows.h>
-
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
 
 class LogFormatter

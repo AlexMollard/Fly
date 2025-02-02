@@ -1,6 +1,6 @@
-#include "AudioVisualizer.h"
+#include "pch.h"
 
-#include <complex>
+#include "AudioVisualizer.h"
 
 #define M_PI 3.14159265358979323846f
 
@@ -150,7 +150,7 @@ void AudioVisualizer::processFFT(const std::vector<float>& samples)
 		}
 		else
 		{
-			bandPeaks[band] = std::max(newMagnitudes[band], bandPeaks[band] - PEAK_FALL_SPEED);
+			bandPeaks[band] = max(newMagnitudes[band], bandPeaks[band] - PEAK_FALL_SPEED);
 		}
 	}
 
@@ -174,7 +174,7 @@ void AudioVisualizer::performFFT(const std::vector<float>& samples, std::vector<
 {
 	// Apply Hann window and prepare FFT input
 	std::vector<std::complex<float>> fftInput(FFT_SIZE);
-	for (size_t i = 0; i < std::min(samples.size(), size_t(FFT_SIZE)); i++)
+	for (size_t i = 0; i < min(samples.size(), size_t(FFT_SIZE)); i++)
 	{
 		float window = 0.5f * (1.0f - std::cos(2.0f * M_PI * i / (FFT_SIZE - 1)));
 		fftInput[i] = std::complex<float>(samples[i] * window, 0.0f);

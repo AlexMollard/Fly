@@ -1,8 +1,4 @@
 #pragma once
-#include <iostream>
-#include <string>
-#include <string_view>
-#include <windows.h>
 
 class OutputDebugStringBuf : public std::streambuf
 {

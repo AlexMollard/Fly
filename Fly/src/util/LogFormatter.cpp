@@ -1,8 +1,6 @@
-#include "LogFormatter.h"
+#include "pch.h"
 
-#include <chrono>
-#include <filesystem>
-#include <iomanip>
+#include "LogFormatter.h"
 
 bool LogFormatter::s_checkedColorSupport = false;
 bool LogFormatter::s_hasColorSupport = false;

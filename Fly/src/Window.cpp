@@ -1,3 +1,5 @@
+#include "pch.h"
+
 #include "Window.h"
 
 #include <hello_imgui/hello_imgui.h>
@@ -5,7 +7,7 @@
 Window::Window(HelloImGui::RunnerParams& params)
       : m_mp3Player(std::make_unique<MP3Player>()), m_show_file_dialog(false), m_dialog(m_show_file_dialog, m_selected_file)
 {
-	params.callbacks.BeforeImGuiRender = [this]() { GuiSetup(); };
+	params.callbacks.SetupImGuiStyle = [this]() { GuiSetup(); };
 }
 
 void Window::Update()
@@ -126,6 +128,8 @@ void Window::GuiSetup()
 	colors[ImGuiCol_Separator] = colors[ImGuiCol_Border];
 	colors[ImGuiCol_SeparatorHovered] = orange * ImVec4(1.0f, 1.0f, 1.0f, 0.78f);
 	colors[ImGuiCol_SeparatorActive] = orange;
+
+	LOG_DEBUG("GUI Setup complete");
 }
 
 void Window::RenderPlaylistPanel()
@@ -359,9 +363,9 @@ void Window::RenderAudioFilters()
 
 	// Calculate the widest label to align all sliders
 	float maxLabelWidth = 0.0f;
-	maxLabelWidth = std::max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_AUDIO_WAVEFORM "  LowPass").x);
-	maxLabelWidth = std::max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_ACTIVITY "  HighPass").x);
-	maxLabelWidth = std::max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_FAST_FORWARD "  Pitch").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_AUDIO_WAVEFORM "  LowPass").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_ACTIVITY "  HighPass").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_FAST_FORWARD "  Pitch").x);
 	maxLabelWidth += ImGui::GetStyle().ItemSpacing.x; // Add some padding
 
 	// LowPass Control (50Hz - 2000Hz)
@@ -465,7 +469,7 @@ void Window::RenderVisualizer()
 	for (size_t i = 0; i < vizData.size(); i++)
 	{
 		float rawHeight = vizData[i] * (VISUALIZER_HEIGHT * 0.95f);
-		float height = std::max(rawHeight, MIN_BAR_HEIGHT);
+		float height = max(rawHeight, MIN_BAR_HEIGHT);
 		float halfHeight = height / 2.0f;
 
 		ImGui::PushID(static_cast<int>(i));
