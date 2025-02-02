@@ -95,6 +95,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		}
 
 		io.FontGlobalScale = 1.0f;
+
+		LOG_DEBUG("Fonts loaded");
 	};
 
 	// Create MP3 player window

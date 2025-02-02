@@ -5,7 +5,6 @@
 #include <AL/alext.h>
 #include <AL/efx.h>
 
-
 static LPALDELETEFILTERS alDeleteFilters;
 static LPALDELETEEFFECTS alDeleteEffects;
 static LPALDELETEAUXILIARYEFFECTSLOTS alDeleteAuxiliaryEffectSlots;
@@ -21,17 +20,227 @@ static LPALAUXILIARYEFFECTSLOTI alAuxiliaryEffectSloti;
 
 static LPALCRESETDEVICESOFT alcResetDeviceSOFT;
 
+void MP3Player::streamingThreadFunc()
+{
+	try
+	{
+		std::vector<float> readBuffer(BUFFER_SIZE * sfinfo.channels);
+		std::vector<int16_t> stereoData(BUFFER_SIZE * 2);
+
+		while (isRunning)
+		{
+			if (isPlaying && !isPaused && streamFile)
+			{
+				std::unique_lock<std::recursive_mutex> lock(stateMutex);
+
+				// Get current buffer state
+				ALint processed = 0;
+				alGetSourcei(source, AL_BUFFERS_PROCESSED, &processed);
+
+				// Calculate minimum required buffers
+				const int minRequiredBuffers = 2; // Minimum safety margin
+				int targetBuffers = NUM_BUFFERS;
+
+				// Adjust target based on playback state
+				if (processed > targetBuffers / 2)
+					targetBuffers = max(minRequiredBuffers, targetBuffers - 1);
+
+				ALint queued = 0;
+				alGetSourcei(source, AL_BUFFERS_QUEUED, &queued);
+
+				// Check for errors
+				ALenum error = alGetError();
+				if (error != AL_NO_ERROR)
+				{
+					LOG_ERROR("Error getting source state: {}", error);
+					continue;
+				}
+
+				LOG_DEBUG("Streaming thread: processed = {}, queued = {}", processed, queued);
+
+				// First unqueue any processed buffers
+				if (processed > 0)
+				{
+					std::vector<ALuint> unqueuedBuffers(processed);
+					alSourceUnqueueBuffers(source, processed, unqueuedBuffers.data());
+					error = alGetError();
+					if (error != AL_NO_ERROR)
+					{
+						LOG_ERROR("Error unqueueing buffers: {}", error);
+						continue;
+					}
+					LOG_DEBUG("Unqueued {} buffers", processed);
+				}
+
+				// Fill and queue new buffers until we have targetBuffers queued
+				int retryCount = 0;
+				while (queued < targetBuffers && currentFrame < totalFrames)
+				{
+					ALuint buffer;
+					alGenBuffers(1, &buffer);
+					streamBuffers.push_back(buffer);
+
+					sf_count_t framesRead = sf_readf_float(streamFile, readBuffer.data(), BUFFER_SIZE);
+					if (framesRead <= 0)
+					{
+						if (repeat && currentFrame >= totalFrames)
+						{
+							sf_seek(streamFile, 0, SEEK_SET);
+							currentFrame = 0;
+							continue;
+						}
+
+						// Add retry logic
+						if (++retryCount < MAX_RETRIES)
+						{
+							sf_seek(streamFile, currentFrame - BUFFER_SIZE, SEEK_SET);
+							continue;
+						}
+
+						LOG_WARN("End of stream reached after {} retries due to framesRead being 0!", retryCount);
+						isPlaying = false;
+						break;
+					}
+
+					// Convert and queue buffer
+					convertToStereo(readBuffer, stereoData, framesRead);
+					alBufferData(buffer, AL_FORMAT_STEREO16, stereoData.data(), static_cast<ALsizei>(framesRead * 2 * sizeof(int16_t)), sfinfo.samplerate);
+
+					error = alGetError();
+					if (error != AL_NO_ERROR)
+					{
+						LOG_ERROR("Error buffering audio data: {}", error);
+						continue;
+					}
+
+					alSourceQueueBuffers(source, 1, &buffer);
+					error = alGetError();
+					if (error != AL_NO_ERROR)
+					{
+						LOG_ERROR("Error queueing buffer: {}", error);
+						continue;
+					}
+
+					currentFrame += framesRead;
+					queued++;
+
+					visualizer.pushAudioData(readBuffer, sfinfo.channels, sfinfo.samplerate);
+					LOG_DEBUG("Queued buffer: framesRead = {}, currentFrame = {}", framesRead, currentFrame.load());
+				}
+
+				// Start playback if needed
+				ALint state;
+				alGetSourcei(source, AL_SOURCE_STATE, &state);
+				if (state != AL_PLAYING && isPlaying && !isPaused)
+				{
+					alSourcePlay(source);
+					error = alGetError();
+					if (error != AL_NO_ERROR)
+					{
+						LOG_ERROR("Error starting playback: {}", error);
+					}
+					else
+					{
+						LOG_DEBUG("Playback started");
+					}
+				}
+
+				lock.unlock();
+			}
+		}
+	}
+	catch (const std::exception& e)
+	{
+		LOG_ERROR("Streaming thread error: {}", e.what());
+	}
+}
+
+void MP3Player::visualizerThreadFunc()
+{
+	while (isRunning)
+	{
+		if (isPlaying)
+		{
+			AudioBuffer buffer;
+			if (audioQueue.pop(buffer))
+			{
+				// Process visualization data in a separate thread
+				visualizer.pushAudioData(buffer.data, static_cast<int>(buffer.size), sfinfo.channels);
+			}
+		}
+		else
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		}
+	}
+}
+
+void MP3Player::convertToStereo(const std::vector<float>& input, std::vector<int16_t>& output, size_t frames)
+{
+	for (size_t i = 0; i < frames; i++)
+	{
+		for (int ch = 0; ch < min(sfinfo.channels, 2); ch++)
+		{
+			float sample = input[i * sfinfo.channels + ch];
+			sample = std::tanh(sample);
+			output[i * 2 + ch] = static_cast<int16_t>(std::clamp(sample * 32767.0f, -32767.0f, 32767.0f));
+		}
+	}
+}
+
 MP3Player::MP3Player()
       : isPlaying(false), volume(40.0f), bass(100.0f), treble(0.0f), pitch(50.0f), currentTrackIndex(0), repeat(false), shuffle(false)
 {
-	initializeOpenAL();
-	setupFilters();
+	try
+	{
+		initializeOpenAL();
+		setupFilters();
+
+		isRunning = true;
+		streamingThread = std::thread(&MP3Player::streamingThreadFunc, this);
+	}
+	catch (const std::exception& e)
+	{
+		cleanup();
+		throw std::runtime_error(std::string("MP3Player initialization failed: ") + e.what());
+	}
 }
 
 MP3Player::~MP3Player()
 {
+	cleanup();
+}
+
+void MP3Player::cleanup()
+{
+	// Stop all threads
+	isRunning = false;
+	isPaused = false;
+	isPlaying = false;
+	audioQueue.terminate();
+
+	if (streamingThread.joinable())
+	{
+		streamingThread.join();
+	}
+
+	// Clean up OpenAL resources
+	std::lock_guard<std::mutex> lock(deviceMutex);
+
 	clearStreamBuffers();
-	cleanupOpenAL();
+
+	if (context)
+	{
+		alcMakeContextCurrent(nullptr);
+		alcDestroyContext(context);
+		context = nullptr;
+	}
+
+	if (device)
+	{
+		alcCloseDevice(device);
+		device = nullptr;
+	}
 }
 
 void MP3Player::initializeOpenAL()
@@ -250,91 +459,166 @@ void MP3Player::updateFilters()
 
 bool MP3Player::loadTrack(const std::string& filename)
 {
-	stop();
-	clearStreamBuffers();
-
-	// Open audio file for streaming
-	streamFile = sf_open(filename.c_str(), SFM_READ, &sfinfo);
-	if (!streamFile)
+	try
 	{
+		std::lock_guard<std::recursive_mutex> lock(stateMutex);
+
+		stop();
+		clearStreamBuffers();
+
+		streamFile = sf_open(filename.c_str(), SFM_READ, &sfinfo);
+		if (!streamFile)
+		{
+			LOG_ERROR("Failed to open audio file: {}", filename);
+			throw std::runtime_error("Failed to open audio file");
+		}
+
+		// Check file format and log details
+		LOG_DEBUG("Opened file: {}, Format: {}, Channels: {}, Samplerate: {}, Frames: {}",
+			filename, sfinfo.format, sfinfo.channels, sfinfo.samplerate, sfinfo.frames);
+
+		// Initialize streaming buffers
+		streamBuffers.resize(NUM_BUFFERS);
+		alGenBuffers(NUM_BUFFERS, streamBuffers.data());
+
+		// Reset counters
+		totalFrames = sfinfo.frames;
+		streamDuration = static_cast<double>(totalFrames) / sfinfo.samplerate;
+		currentFrame = 0;
+		pausedTime = 0.0;
+
+		LOG_DEBUG("Loading track: {}, Frames: {}, Duration: {:.2f}s", filename, totalFrames, streamDuration.load());
+
+		// Initial buffer fill
+		std::vector<float> initialData(BUFFER_SIZE * sfinfo.channels);
+		std::vector<int16_t> stereoData(BUFFER_SIZE * 2);
+
+		// Fill all initial buffers
+		for (ALuint buffer: streamBuffers)
+		{
+			sf_count_t framesRead = sf_readf_float(streamFile, initialData.data(), BUFFER_SIZE);
+			LOG_DEBUG("Initial frames read: {}", framesRead);
+
+			if (framesRead > 0)
+			{
+				convertToStereo(initialData, stereoData, framesRead);
+
+				alBufferData(buffer, AL_FORMAT_STEREO16, stereoData.data(), static_cast<ALsizei>(framesRead * 2 * sizeof(int16_t)), sfinfo.samplerate);
+
+				alSourceQueueBuffers(source, 1, &buffer);
+
+				currentFrame += framesRead;
+				LOG_DEBUG("Initial buffer filled: {} frames, position: {}", framesRead, currentFrame.load());
+			}
+		}
+
+		currentTrack = filename;
+
+		// Update playlist
+		if (std::find(playlist.begin(), playlist.end(), filename) == playlist.end())
+		{
+			playlist.push_back(filename);
+			currentTrackIndex = playlist.size() - 1;
+		}
+		else
+		{
+			auto it = std::find(playlist.begin(), playlist.end(), filename);
+			currentTrackIndex = std::distance(playlist.begin(), it);
+		}
+
+		// Set source properties
+		alSourcei(source, AL_SOURCE_RELATIVE, AL_FALSE);
+		alSourcei(source, AL_SOURCE_SPATIALIZE_SOFT, AL_TRUE);
+		alSourcef(source, AL_GAIN, volume / 100.0f);
+
+		float position[3] = { positionX, 0.0f, positionZ };
+		alSourcefv(source, AL_POSITION, position);
+
+		LOG_DEBUG("Track loaded successfully");
+		return true;
+	}
+	catch (const std::exception& e)
+	{
+		LOG_ERROR("Failed to load track: {}", e.what());
+		clearStreamBuffers();
 		return false;
 	}
-
-	// Store total frames and calculate duration
-	totalFrames = sfinfo.frames;
-	streamDuration = static_cast<double>(totalFrames) / sfinfo.samplerate;
-	streamPosition = 0;
-	pausedTime = 0.0;
-
-	// Generate streaming buffers
-	streamBuffers.resize(NUM_BUFFERS);
-	alGenBuffers(NUM_BUFFERS, streamBuffers.data());
-
-	// Initial fill of all buffers
-	for (ALuint buffer: streamBuffers)
-	{
-		if (!streamChunk(buffer))
-		{
-			clearStreamBuffers();
-			return false;
-		}
-		alSourceQueueBuffers(source, 1, &buffer);
-	}
-
-	currentTrack = filename;
-	streaming = true;
-
-	// After generating buffers and before queuing them:
-	alSourcei(source, AL_SOURCE_RELATIVE, AL_FALSE);
-	alSourcei(source, AL_SOURCE_SPATIALIZE_SOFT, AL_TRUE);
-
-	// Create initial position
-	float position[3] = { positionX, 0.0f, positionZ };
-	alSourcefv(source, AL_POSITION, position);
-
-	// Add to playlist if not already present
-	if (std::find(playlist.begin(), playlist.end(), filename) == playlist.end())
-	{
-		playlist.push_back(filename);
-		currentTrackIndex = playlist.size() - 1;
-	}
-
-	LOG_DEBUG("Loaded track: {}", filename);
-
-	return true;
 }
 
 void MP3Player::play()
 {
-	if (!currentTrack.empty() && streaming)
+	if (currentTrack.empty())
+		return;
+
+	try
 	{
-		if (pausedTime > 0.0)
+		std::lock_guard<std::recursive_mutex> lock(stateMutex);
+
+		ALint state;
+		alGetSourcei(source, AL_SOURCE_STATE, &state);
+		LOG_DEBUG("Current source state before play: {}", state);
+
+		ALint queued;
+		alGetSourcei(source, AL_BUFFERS_QUEUED, &queued);
+		LOG_DEBUG("Queued buffers before play: {}", queued);
+
+		if (queued == 0)
 		{
-			seekToPosition(pausedTime);
+			LOG_DEBUG("No buffers queued, reloading track");
+			if (!loadTrack(currentTrack))
+			{
+				return;
+			}
 		}
+
 		alSourcePlay(source);
+		ALenum error = alGetError();
+		if (error != AL_NO_ERROR)
+		{
+			LOG_ERROR("Error playing source: {}", error);
+			return;
+		}
+
+		alGetSourcei(source, AL_SOURCE_STATE, &state);
+		LOG_DEBUG("Source state after play: {}", state);
+
+		isPaused = false;
 		isPlaying = true;
+
+		// Additional debug logs
+		alGetSourcei(source, AL_BUFFERS_QUEUED, &queued);
+		LOG_DEBUG("Queued buffers after play: {}", queued);
+	}
+	catch (const std::exception& e)
+	{
+		LOG_ERROR("Play error: {}", e.what());
 	}
 }
 
 void MP3Player::pause()
 {
-	if (isPlaying)
+	if (!isPlaying)
+		return;
+
 	{
-		pausedTime = getCurrentTime();
+		std::lock_guard<std::recursive_mutex> lock(stateMutex);
 		alSourcePause(source);
-		isPlaying = false;
 	}
+
+	isPaused = true;
+	isPlaying = false;
 }
 
 void MP3Player::stop()
 {
-	if (!currentTrack.empty())
 	{
-		pausedTime = 0;
+		std::lock_guard<std::recursive_mutex> lock(stateMutex);
 		alSourceStop(source);
-		isPlaying = false;
 	}
+
+	isPlaying = false;
+	isPaused = false;
+	audioQueue.clear();
 }
 
 void MP3Player::setVolume(float newVolume)
@@ -531,16 +815,31 @@ float MP3Player::getPitch() const
 
 void MP3Player::update()
 {
-	if (isPlaying)
-	{
-		updateStream();
-		visualizer.update();
-	}
-}
+	if (!isPlaying)
+		return;
 
-std::vector<float> MP3Player::getWaveformData() const
-{
-	return waveformData;
+	try
+	{
+		// Only check and update the playing state
+		ALint state;
+		alGetSourcei(source, AL_SOURCE_STATE, &state);
+
+		if (state != AL_PLAYING && isPlaying && !isPaused)
+		{
+			ALint queued;
+			alGetSourcei(source, AL_BUFFERS_QUEUED, &queued);
+
+			if (queued > 0)
+			{
+				alSourcePlay(source);
+				LOG_DEBUG("Restarted playback in update() with {} buffers", queued);
+			}
+		}
+	}
+	catch (const std::exception& e)
+	{
+		LOG_ERROR("Update error: {}", e.what());
+	}
 }
 
 void MP3Player::removeTrack(size_t index)
@@ -557,86 +856,10 @@ void MP3Player::removeTrack(size_t index)
 	}
 }
 
-void MP3Player::updateStream()
-{
-	if (!streaming || !streamFile)
-		return;
-
-	ALint processed;
-	alGetSourcei(source, AL_BUFFERS_PROCESSED, &processed);
-
-	while (processed--)
-	{
-		ALuint buffer;
-		alSourceUnqueueBuffers(source, 1, &buffer);
-
-		if (!streamChunk(buffer))
-		{
-			if (repeat)
-			{
-				sf_seek(streamFile, 0, SEEK_SET);
-				streamChunk(buffer);
-			}
-		}
-		alSourceQueueBuffers(source, 1, &buffer);
-	}
-
-	// Check playback status
-	ALint state;
-	alGetSourcei(source, AL_SOURCE_STATE, &state);
-	if (state != AL_PLAYING && state != AL_PAUSED)
-	{
-		ALint queued;
-		alGetSourcei(source, AL_BUFFERS_QUEUED, &queued);
-		if (queued > 0)
-		{
-			alSourcePlay(source);
-		}
-	}
-}
-
-bool MP3Player::streamChunk(ALuint buffer)
-{
-	// Read as float
-	std::vector<float> floatData(BUFFER_SIZE * sfinfo.channels);
-	sf_count_t samplesRead = sf_readf_float(streamFile, floatData.data(), BUFFER_SIZE);
-
-	if (samplesRead > 0)
-	{
-		// Convert to 16-bit stereo
-		std::vector<int16_t> stereoData(samplesRead * 2, 0); // 2 channels
-
-		// Map input channels to stereo and convert to 16-bit
-		for (sf_count_t i = 0; i < samplesRead; i++)
-		{
-			for (int ch = 0; ch < min(sfinfo.channels, 2); ch++)
-			{
-				float sample = floatData[i * sfinfo.channels + ch];
-
-				// Apply soft limiting to prevent clipping
-				sample = std::tanh(sample); // Soft clip at ±1.0
-
-				// Convert to 16-bit with proper scaling
-				stereoData[i * 2 + ch] = static_cast<int16_t>(std::clamp(sample * 32767.0f, -32767.0f, 32767.0f));
-			}
-		}
-
-		// Process audio data for visualization (use float data for better accuracy)
-		visualizer.pushAudioData(floatData, sfinfo.channels, sfinfo.samplerate);
-
-		// Update stream position tracking
-		updateStreamPosition();
-
-		// Queue the processed audio data
-		alBufferData(buffer, AL_FORMAT_STEREO16, stereoData.data(), static_cast<ALsizei>(samplesRead * 2 * sizeof(int16_t)), sfinfo.samplerate);
-
-		return true;
-	}
-	return false;
-}
-
 void MP3Player::clearStreamBuffers()
 {
+	std::lock_guard<std::recursive_mutex> lock(stateMutex);
+
 	if (!streamBuffers.empty())
 	{
 		alSourceStop(source);
@@ -663,22 +886,31 @@ double MP3Player::getCurrentTime() const
 {
 	if (!streamFile)
 		return 0.0;
-	if (!isPlaying)
+	if (isPaused)
 		return pausedTime;
+	if (!isPlaying)
+		return 0.0;
 
-	// Get the current position in the current buffer
-	ALint sampleOffset;
-	alGetSourcei(source, AL_SAMPLE_OFFSET, &sampleOffset);
+	try
+	{
+		// Get current playback position
+		ALint sampleOffset;
+		alGetSourcei(source, AL_SAMPLE_OFFSET, &sampleOffset);
 
-	// Get number of processed buffers
-	ALint processedBuffers;
-	alGetSourcei(source, AL_BUFFERS_PROCESSED, &processedBuffers);
+		// Get number of processed buffers
+		ALint processedBuffers;
+		alGetSourcei(source, AL_BUFFERS_PROCESSED, &processedBuffers);
 
-	// Get current buffer position in samples
-	// Each buffer is BUFFER_SIZE samples
-	sf_count_t totalSamples = streamPosition + processedBuffers * BUFFER_SIZE + sampleOffset;
+		// Calculate total samples played
+		sf_count_t totalSamples = streamPosition + (static_cast<sf_count_t>(processedBuffers) * BUFFER_SIZE) + sampleOffset;
 
-	return static_cast<double>(totalSamples) / sfinfo.samplerate;
+		return static_cast<double>(totalSamples) / sfinfo.samplerate;
+	}
+	catch (const std::exception& e)
+	{
+		LOG_ERROR("getCurrentTime error: {}", e.what());
+		return pausedTime;
+	}
 }
 
 void MP3Player::updateStreamPosition()
@@ -691,45 +923,42 @@ void MP3Player::seekToPosition(double seconds)
 	if (!streamFile)
 		return;
 
-	// Calculate frame position
-	sf_count_t framePos = static_cast<sf_count_t>(seconds * sfinfo.samplerate);
-
-	// Ensure position is within bounds
-	framePos = std::clamp(framePos, static_cast<sf_count_t>(0), totalFrames);
-
-	// Stop playback and clear existing buffers
-	alSourceStop(source);
-
-	// Unqueue all buffers
-	ALint queued;
-	alGetSourcei(source, AL_BUFFERS_QUEUED, &queued);
-	std::vector<ALuint> unqueuedBuffers(queued);
-	if (queued > 0)
+	try
 	{
-		alSourceUnqueueBuffers(source, queued, unqueuedBuffers.data());
-	}
+		std::lock_guard<std::recursive_mutex> lock(stateMutex);
 
-	// Seek to new position
-	sf_seek(streamFile, framePos, SEEK_SET);
-	streamPosition = framePos;
+		sf_count_t framePos = static_cast<sf_count_t>(seconds * sfinfo.samplerate);
+		framePos = std::clamp(framePos, static_cast<sf_count_t>(0), totalFrames);
 
-	// Refill buffers from new position
-	for (ALuint buffer: streamBuffers)
-	{
-		if (!streamChunk(buffer))
+		// Clear existing audio queue
+		audioQueue.clear();
+
+		// Stop and clear OpenAL buffers
+		alSourceStop(source);
+
+		ALint queued;
+		alGetSourcei(source, AL_BUFFERS_QUEUED, &queued);
+		if (queued > 0)
 		{
-			break;
+			std::vector<ALuint> unqueuedBuffers(queued);
+			alSourceUnqueueBuffers(source, queued, unqueuedBuffers.data());
 		}
-		alSourceQueueBuffers(source, 1, &buffer);
-	}
 
-	// Resume playback if it was playing before
-	if (isPlaying)
+		// Seek in the file
+		sf_seek(streamFile, framePos, SEEK_SET);
+		currentFrame = framePos; // Update the frame counter
+		pausedTime = seconds;
+
+		// If we were playing, restart playback
+		if (isPlaying)
+		{
+			play();
+		}
+	}
+	catch (const std::exception& e)
 	{
-		alSourcePlay(source);
+		LOG_ERROR("Seek error: {}", e.what());
 	}
-
-	pausedTime = seconds;
 }
 
 void MP3Player::setCurrentTime(float percentage)
