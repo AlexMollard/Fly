@@ -38,12 +38,13 @@ jobs:
           msbuild /p:Configuration=Release /p:Platform=x64 /p:VcpkgTriplet=x64-windows /p:OutDir=bin\Release\ /p:WindowsTargetPlatformVersion=10.0 /p:RuntimeLibrary=MultiThreaded "Fly.sln"
 
       - name: Copy Dependencies
+        shell: cmd
         run: |
           mkdir release
           copy bin\Release\*.exe release\
           copy bin\Release\*.dll release\
-          if exist "assets\*.ttf" copy assets\*.ttf release\
-          Compress-Archive -Path release\* -DestinationPath Fly-windows.zip
+          if exist assets\*.ttf copy assets\*.ttf release\
+          powershell Compress-Archive -Path release\* -DestinationPath Fly-windows.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
