@@ -143,7 +143,7 @@ void Window::RenderControlsPanel(float height)
 		float windowWidth = ImGui::GetContentRegionAvail().x;
 
 		// Welcome text
-		const char* welcomeText = ICON_LC_MUSIC "  Welcome to the Audio Player";
+		const char* welcomeText = ICON_LC_MUSIC "  Welcome to the Fly Audio Player";
 		float textWidth = ImGui::CalcTextSize(welcomeText).x;
 		ImGui::SetCursorPosX((windowWidth - textWidth) * 0.5f);
 		ImGui::TextColored(ImGui::GetStyle().Colors[ImGuiCol_ButtonActive], "%s", welcomeText);
