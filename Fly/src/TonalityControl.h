@@ -43,6 +43,14 @@ public:
 
 	// This will make it into a lambda function for the audio streamer
 	std::function<void(std::vector<float>&, unsigned int, unsigned int)> CreateProcessor();
+	
+	// Preset functions
+	void SetDefaultPreset();
+	void SetSlowedPreset();
+	void SetChipmunkPreset();
+	void SetDeepPreset();
+	void SetRadioPreset();
+	void SetRandomPreset();
 
 private:
 	// Calculate coefficients for shelf filter

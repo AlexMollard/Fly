@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "containers/ThreadSafeQueue.h"
+#include "RoomReverb.h"
 
 class AudioStreamer
 {
@@ -138,6 +139,11 @@ public:
 		return m_source;
 	}
 
+	RoomReverb& GetRoomReverb()
+	{
+		return m_roomReverb;
+	}
+
 protected:
 	// Virtual methods for derived classes
 	virtual bool OnGetData(AudioChunk& chunk) = 0;
@@ -185,4 +191,7 @@ private:
 	// Audio processing
 	std::vector<float> m_processingBuffer;
 	EffectProcessor m_effectProcessor;
+
+	// Effects
+	RoomReverb m_roomReverb;
 };

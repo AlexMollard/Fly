@@ -133,6 +133,15 @@ void AudioStreamer::InitOpenAL()
 	CheckAlError("Failed to generate source");
 	LOG_DEBUG("OpenAL source generated successfully");
 
+	if (!m_roomReverb.Init(m_device))
+	{
+		LOG_WARN("Failed to initialize room reverb effect");
+	}
+	else
+	{
+		m_roomReverb.AttachToSource(m_source);
+	}
+
 	// Configure source properties
 	alSourcef(m_source, AL_PITCH, 1.0f);
 	alSourcef(m_source, AL_GAIN, m_volume);
@@ -192,6 +201,8 @@ void AudioStreamer::Cleanup()
 		LOG_DEBUG("Joining streaming thread");
 		m_streamingThread.join();
 	}
+	
+	m_roomReverb.Cleanup();
 
 	CleanupOpenAL();
 	LOG_INFO("AudioStreamer cleanup completed");

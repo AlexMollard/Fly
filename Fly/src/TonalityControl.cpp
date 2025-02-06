@@ -6,8 +6,8 @@
 void TonalityControl::SetBass(float level)
 {
 	m_inBass = level;
-	m_bassGain = std::pow(20.0f, level); // Convert to gain
-	m_bassGain = std::clamp(m_bassGain, 0.0f, 4.0f);
+	m_bassGain = std::pow(10.0f, level); // Convert to gain
+	m_bassGain = std::clamp(m_bassGain, 0.0f, 2.0f);
 }
 
 float TonalityControl::GetBass() const
@@ -19,8 +19,8 @@ float TonalityControl::GetBass() const
 void TonalityControl::SetTreble(float level)
 {
 	m_inTreble = level;
-	m_trebleGain = std::pow(20.0f, level); // Convert to gain
-	m_trebleGain = std::clamp(m_trebleGain, 0.0f, 4.0f);
+	m_trebleGain = std::pow(10.0f, level); // Convert to gain
+	m_trebleGain = std::clamp(m_trebleGain, 0.0f, 2.0f);
 }
 
 float TonalityControl::GetTreble() const
@@ -70,6 +70,63 @@ std::function<void(std::vector<float>&, unsigned int, unsigned int)> TonalityCon
 			}
 		}
 	};
+}
+
+void TonalityControl::SetDefaultPreset()
+{
+	// Reset all parameters to neutral values
+	SetBass(0.0f);
+	SetTreble(0.0f);
+	SetPitch(0.0f);
+}
+
+void TonalityControl::SetSlowedPreset()
+{
+	// Create a slowed down, deeper sound effect
+	// Increase bass, reduce treble slightly, lower pitch
+	SetBass(0.6f);    // Enhanced bass
+	SetTreble(-0.2f); // Slightly reduced treble
+	SetPitch(-4.0f);  // Lower pitch by 4 semitones for slower effect
+}
+
+void TonalityControl::SetChipmunkPreset()
+{
+	// Create a high-pitched, chipmunk-like effect
+	// Reduce bass, increase treble, raise pitch significantly
+	SetBass(-0.4f);  // Reduced bass
+	SetTreble(0.5f); // Enhanced treble
+	SetPitch(8.0f);  // Raise pitch by 8 semitones for chipmunk effect
+}
+
+void TonalityControl::SetDeepPreset()
+{
+	// Create a deep, bass-heavy effect
+	// Significantly increase bass, reduce treble, lower pitch
+	SetBass(0.8f);    // Significantly enhanced bass
+	SetTreble(-0.4f); // Reduced treble
+	SetPitch(-6.0f);  // Lower pitch by 6 semitones for deeper sound
+}
+
+void TonalityControl::SetRadioPreset()
+{
+	// Create an AM radio-like effect
+	// Reduce bass, enhance mid-treble, slight pitch modification
+	SetBass(-0.6f);  // Significantly reduced bass
+	SetTreble(0.3f); // Enhanced treble for that tinny radio sound
+	SetPitch(2.0f);  // Slight pitch increase by 2 semitones for age effect
+}
+
+void TonalityControl::SetRandomPreset()
+{
+	// Generate random values between -1.0 and 1.0
+	float randomBass = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
+	float randomTreble = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
+	float randomPitch = (static_cast<float>(rand()) / RAND_MAX) * 24.0f - 12.0f;
+
+	// Apply random values with some constraints to avoid extreme combinations
+	SetBass(randomBass * 0.8f);     // Scale by 0.8 to avoid extremes
+	SetTreble(randomTreble * 0.8f); // Scale by 0.8 to avoid extremes
+	SetPitch(randomPitch * 0.6f);   // Scale by 0.6 to avoid extreme pitch shifts
 }
 
 // Calculate coefficients for shelf filter

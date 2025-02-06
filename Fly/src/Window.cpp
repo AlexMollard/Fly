@@ -5,13 +5,14 @@
 #include <hello_imgui/hello_imgui.h>
 
 Window::Window(HelloImGui::RunnerParams& params)
-      : m_dialog(m_showFileDialog, m_selectedFile)
+      : m_dialog(m_showFileDialog, m_selectedFile), m_roomReverb(m_audioStreamer.GetRoomReverb())
 {
 	params.callbacks.SetupImGuiStyle = [this]() { GuiSetup(); };
 
 	m_tonalityControl.SetBass(0.0f);   // Neutral bass (-1 to 1)
 	m_tonalityControl.SetTreble(0.0f); // Neutral treble (-1 to 1)
 	m_audioStreamer.SetEffectProcessor(m_tonalityControl.CreateProcessor());
+	m_tonalityControl.SetSource(m_audioStreamer.GetSource());
 }
 
 void Window::Update()
@@ -47,7 +48,6 @@ void Window::Render()
 		{
 			m_audioStreamer.OpenFromFile(m_selectedFile);
 			m_audioStreamer.Play();
-			m_tonalityControl.SetSource(m_audioStreamer.GetSource());
 			m_playlist.AddTrack(m_selectedFile);
 			m_selectedFile.clear();
 		}
@@ -88,7 +88,6 @@ void Window::RenderPlaylistPanel(float width, float height)
 		{
 			m_audioStreamer.OpenFromFile(tracks[i]);
 			m_audioStreamer.Play();
-			m_tonalityControl.SetSource(m_audioStreamer.GetSource());
 		}
 	}
 	ImGui::EndChild();
@@ -129,6 +128,7 @@ void Window::RenderControlsPanel(float height)
 		RenderTrackInfo();
 		RenderVisualizer();
 		RenderAudioFilters();
+		RenderRoomProps();
 		RenderSpatialControl();
 	}
 	else
@@ -254,31 +254,6 @@ void Window::GuiSetup()
 	LOG_DEBUG("GUI Setup complete");
 }
 
-void Window::RenderControlsPanel()
-{
-	// Calculate the heights
-	float totalHeight = ImGui::GetWindowHeight() - ImGui::GetStyle().WindowPadding.y * 2.375f;
-
-	ImGui::BeginChild("Controls", ImVec2(0, totalHeight), true);
-
-	// If we have a track
-	if (m_audioStreamer.GetStatus() != AudioStreamer::Status::Stopped)
-	{
-		RenderTrackInfo();
-		RenderVisualizer();
-		RenderPlaybackControls();
-		RenderVolumeControl();
-		RenderAudioFilters();
-		RenderSpatialControl();
-	}
-	else
-	{
-		ImGui::Text("ADD MORE INFO HERE: No track loaded");
-	}
-
-	ImGui::EndChild();
-}
-
 void Window::RenderTrackInfo()
 {
 	const AudioStreamer::TrackInfo& trackInfo = m_audioStreamer.GetTrackInfo();
@@ -305,8 +280,6 @@ void Window::RenderTrackInfo()
 	displayField("Album:", trackInfo.album);
 	displayField("Genre:", trackInfo.genre);
 	displayField("Year:", trackInfo.year);
-
-	ImGui::Separator();
 }
 
 void Window::RenderProgressBar()
@@ -454,45 +427,42 @@ std::string Window::FormatTime(double seconds)
 
 void Window::RenderAudioFilters()
 {
-	ImGui::Spacing();
-	ImGui::Separator();
-	ImGui::Spacing();
-
 	// Start a group for the filters
 	ImGui::BeginGroup();
 
+	ImGui::Separator();
+	ImGui::Text(ICON_LC_RADIO "  Sound Properties");
+
 	// Calculate the widest label to align all sliders
 	float maxLabelWidth = 0.0f;
-	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_AUDIO_WAVEFORM "  LowPass").x);
-	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_ACTIVITY "  HighPass").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_AUDIO_WAVEFORM "  Bass").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_ACTIVITY "  Treble").x);
 	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_FAST_FORWARD "  Pitch").x);
 	maxLabelWidth += ImGui::GetStyle().ItemSpacing.x; // Add some padding
 
+	// Bass Control
 	ImGui::AlignTextToFramePadding();
 	ImGui::Text(ICON_LC_AUDIO_WAVEFORM "  Bass");
 	ImGui::SameLine(maxLabelWidth);
 	float bass = m_tonalityControl.GetBass();
 	// scale the value to 0 to 100
 	bass = (bass + 1.0f) * 50.0f;
-
 	ImGui::SetNextItemWidth(-1);
 	if (ImGui::SliderFloat("##Bass", &bass, 0.0f, 100.0f, "%.0f%%"))
 	{
 		// scale it to -1 to 1
 		bass = (bass - 50.0f) / 50.0f;
-
 		m_tonalityControl.SetBass(bass);
 	}
 
+	// Treble Control
 	ImGui::Spacing();
-
 	ImGui::AlignTextToFramePadding();
 	ImGui::Text(ICON_LC_ACTIVITY "  Treble");
 	ImGui::SameLine(maxLabelWidth);
 	float treble = m_tonalityControl.GetTreble();
 	// scale the value to 0 to 100
 	treble = (treble + 1.0f) * 50.0f;
-
 	ImGui::SetNextItemWidth(-1);
 	if (ImGui::SliderFloat("##Treble", &treble, 0.0f, 100.0f, "%.0f%%"))
 	{
@@ -501,17 +471,212 @@ void Window::RenderAudioFilters()
 		m_tonalityControl.SetTreble(treble);
 	}
 
+	// Pitch Control
 	ImGui::Spacing();
-
 	ImGui::AlignTextToFramePadding();
 	ImGui::Text(ICON_LC_FAST_FORWARD "  Pitch");
 	ImGui::SameLine(maxLabelWidth);
 	float pitch = m_tonalityControl.GetPitch();
-
 	ImGui::SetNextItemWidth(-1);
 	if (ImGui::SliderFloat("##Pitch", &pitch, -12.0f, 12.0f, "%.1f semitones"))
 	{
 		m_tonalityControl.SetPitch(pitch);
+	}
+
+	// Presets Section
+	ImGui::Spacing();
+
+	// Calculate button width to fit 6 buttons
+	float buttonWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 5) / 6;
+
+	// First row of preset buttons
+	if (ImGui::Button("Default", ImVec2(buttonWidth, 0)))
+	{
+		m_tonalityControl.SetDefaultPreset();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Slowed", ImVec2(buttonWidth, 0)))
+	{
+		m_tonalityControl.SetSlowedPreset();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Chipmunk", ImVec2(buttonWidth, 0)))
+	{
+		m_tonalityControl.SetChipmunkPreset();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Deep", ImVec2(buttonWidth, 0)))
+	{
+		m_tonalityControl.SetDeepPreset();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Radio", ImVec2(buttonWidth, 0)))
+	{
+		m_tonalityControl.SetRadioPreset();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Random", ImVec2(buttonWidth, 0)))
+	{
+		m_tonalityControl.SetRandomPreset();
+	}
+
+	ImGui::EndGroup();
+}
+
+void Window::RenderRoomProps()
+{
+	ImGui::BeginGroup();
+
+	ImGui::Separator();
+	ImGui::Text(ICON_LC_WAVES "  Reverb Properties");
+
+	// Calculate max label width for alignment
+	float maxLabelWidth = 0.0f;
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_HOURGLASS "  Decay Time").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_WAVES "  Early Refl.").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_TIMER "  Late Reverb").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_EXPAND "  Room Size").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_CLOCK "  Refl. Delay").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_BELL_RING "  Late Delay").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_DROPLETS "  Dampening").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_WIND "  Air Absorp.").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_RADIUS "  Rolloff").x);
+	maxLabelWidth += ImGui::GetStyle().ItemSpacing.x;
+
+	// Decay Time
+	ImGui::AlignTextToFramePadding();
+	ImGui::Text(ICON_LC_HOURGLASS "  Decay Time");
+	ImGui::SameLine(maxLabelWidth);
+	float decayTime = m_roomReverb.GetDecayTime();
+	ImGui::SetNextItemWidth(-1);
+	if (ImGui::SliderFloat("##DecayTime", &decayTime, 0.1f, 20.0f, "%.1f s"))
+	{
+		m_roomReverb.SetDecayTime(decayTime);
+	}
+
+	// Early Reflections Gain
+	ImGui::Spacing();
+	ImGui::AlignTextToFramePadding();
+	ImGui::Text(ICON_LC_WAVES "  Early Refl.");
+	ImGui::SameLine(maxLabelWidth);
+	float reflGain = m_roomReverb.GetReflectionsGain();
+	float reflPercentage = reflGain * 31.6f; // 3.16 = 100%
+	ImGui::SetNextItemWidth(-1);
+	if (ImGui::SliderFloat("##ReflGain", &reflPercentage, 0.0f, 100.0f, "%.0f%%"))
+	{
+		m_roomReverb.SetReflectionsGain(reflPercentage / 31.6f);
+	}
+
+	// Reflections Delay
+	ImGui::Spacing();
+	ImGui::AlignTextToFramePadding();
+	ImGui::Text(ICON_LC_CLOCK "  Refl. Delay");
+	ImGui::SameLine(maxLabelWidth);
+	float reflDelay = m_roomReverb.GetReflectionsDelay();
+	ImGui::SetNextItemWidth(-1);
+	if (ImGui::SliderFloat("##ReflDelay", &reflDelay, 0.0f, 0.3f, "%.3f s"))
+	{
+		m_roomReverb.SetReflectionsDelay(reflDelay);
+	}
+
+	// Late Reverb Gain
+	ImGui::Spacing();
+	ImGui::AlignTextToFramePadding();
+	ImGui::Text(ICON_LC_TIMER "  Late Reverb");
+	ImGui::SameLine(maxLabelWidth);
+	float lateGain = m_roomReverb.GetLateGain();
+	float latePercentage = lateGain * 10.0f;
+	ImGui::SetNextItemWidth(-1);
+	if (ImGui::SliderFloat("##LateGain", &latePercentage, 0.0f, 100.0f, "%.0f%%"))
+	{
+		m_roomReverb.SetLateGain(latePercentage / 10.0f);
+	}
+
+	// Late Reverb Delay
+	ImGui::Spacing();
+	ImGui::AlignTextToFramePadding();
+	ImGui::Text(ICON_LC_BELL_RING "  Late Delay");
+	ImGui::SameLine(maxLabelWidth);
+	float lateDelay = m_roomReverb.GetLateDelay();
+	ImGui::SetNextItemWidth(-1);
+	if (ImGui::SliderFloat("##LateDelay", &lateDelay, 0.0f, 0.1f, "%.3f s"))
+	{
+		m_roomReverb.SetLateDelay(lateDelay);
+	}
+
+	// HF Dampening (using HF Ratio)
+	ImGui::Spacing();
+	ImGui::AlignTextToFramePadding();
+	ImGui::Text(ICON_LC_DROPLETS "  Dampening");
+	ImGui::SameLine(maxLabelWidth);
+	float hfRatio = m_roomReverb.GetDecayHFRatio();
+	float dampPercentage = (hfRatio - 0.1f) * 52.6f;
+	ImGui::SetNextItemWidth(-1);
+	if (ImGui::SliderFloat("##HFRatio", &dampPercentage, 0.0f, 100.0f, "%.0f%%"))
+	{
+		m_roomReverb.SetDecayHFRatio(0.1f + (dampPercentage / 52.6f));
+	}
+
+	// Air Absorption
+	ImGui::Spacing();
+	ImGui::AlignTextToFramePadding();
+	ImGui::Text(ICON_LC_WIND "  Air Absorp.");
+	ImGui::SameLine(maxLabelWidth);
+	float airAbsorption = m_roomReverb.GetAirAbsorption();
+	float airPercentage = (airAbsorption - 0.892f) * 926.0f;
+	ImGui::SetNextItemWidth(-1);
+	if (ImGui::SliderFloat("##AirAbsorption", &airPercentage, 0.0f, 100.0f, "%.0f%%"))
+	{
+		m_roomReverb.SetAirAbsorption(0.892f + (airPercentage / 926.0f));
+	}
+
+	// Room Rolloff
+	ImGui::Spacing();
+	ImGui::AlignTextToFramePadding();
+	ImGui::Text(ICON_LC_RADIUS "  Rolloff");
+	ImGui::SameLine(maxLabelWidth);
+	float rolloff = m_roomReverb.GetRoomRolloff();
+	float rolloffPercentage = rolloff * 10.0f;
+	ImGui::SetNextItemWidth(-1);
+	if (ImGui::SliderFloat("##Rolloff", &rolloffPercentage, 0.0f, 100.0f, "%.0f%%"))
+	{
+		m_roomReverb.SetRoomRolloff(rolloffPercentage / 10.0f);
+	}
+
+	// Presets
+	ImGui::Spacing();
+
+	// Calculate button width to fit 6 buttons
+	float buttonWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 5) / 6;
+
+	if (ImGui::Button("Reset", ImVec2(buttonWidth, 0)))
+	{
+		m_roomReverb.SetDefaultPreset();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Small", ImVec2(buttonWidth, 0)))
+	{
+		m_roomReverb.SetSmallRoomPreset();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Medium", ImVec2(buttonWidth, 0)))
+	{
+		m_roomReverb.SetMediumRoomPreset();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Large", ImVec2(buttonWidth, 0)))
+	{
+		m_roomReverb.SetLargeRoomPreset();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Hall", ImVec2(buttonWidth, 0)))
+	{
+		m_roomReverb.SetHallPreset();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Cave", ImVec2(buttonWidth, 0)))
+	{
+		m_roomReverb.SetCavePreset();
 	}
 
 	ImGui::EndGroup();

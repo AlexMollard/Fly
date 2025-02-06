@@ -26,13 +26,13 @@ private:
 	void RenderControlsPanel(float height);
 	void RenderBottomPanel(float height);
 
-	void RenderControlsPanel();
 	void RenderTrackInfo();
 	void RenderProgressBar();
 	void RenderTimeDisplay();
 	void RenderPlaybackControls();
 	void RenderVolumeControl();
 	void RenderAudioFilters();
+	void RenderRoomProps();
 	void RenderVisualizer();
 	void RenderSpatialControl();
 
@@ -42,6 +42,7 @@ private:
 	MP3Streamer m_audioStreamer;
 	Playlist m_playlist;
 	TonalityControl m_tonalityControl;
+	RoomReverb& m_roomReverb;
 
 	bool m_showFileDialog = false;
 	std::string m_selectedFile;
