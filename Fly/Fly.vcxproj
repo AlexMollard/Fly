@@ -108,6 +108,7 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\AudioStreamer.cpp" />
     <ClCompile Include="src\Window.cpp" />
+    <ClCompile Include="src\TonalityControl.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\PlayList.h" />
@@ -122,6 +123,7 @@
     <ClInclude Include="src\IconsLucide.h" />
     <ClInclude Include="src\AudioStreamer.h" />
     <ClInclude Include="src\Window.h" />
+    <ClInclude Include="src\TonalityControl.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="vcpkg.json" />

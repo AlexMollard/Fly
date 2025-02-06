@@ -8,6 +8,10 @@ Window::Window(HelloImGui::RunnerParams& params)
       : m_audioStreamer(std::make_unique<MP3Streamer>()), m_playlist(std::make_unique<Playlist>()), m_dialog(m_showFileDialog, m_selectedFile)
 {
 	params.callbacks.SetupImGuiStyle = [this]() { GuiSetup(); };
+
+	m_tonalityControl.setBass(0.0f);   // Neutral bass (-1 to 1)
+	m_tonalityControl.setTreble(0.0f); // Neutral treble (-1 to 1)
+	m_audioStreamer->setEffectProcessor(m_tonalityControl.createProcessor());
 }
 
 void Window::Update()
@@ -208,7 +212,7 @@ void Window::RenderControlsPanel()
 		RenderTrackInfo();
 		RenderPlaybackControls();
 		RenderVolumeControl();
-		//RenderAudioFilters();
+		RenderAudioFilters();
 		//RenderSpatialControl();
 	}
 	else
@@ -328,6 +332,7 @@ void Window::RenderPlaybackControls()
 	if (ImGui::Button(("  " ICON_LC_SKIP_BACK "  "), ImVec2(controlWidth, buttonHeight)))
 	{
 		//m_audioStreamer->playPrevious();
+		LOG_WARN("Play Previous not implemented");
 	}
 	ImGui::SameLine();
 	if (ImGui::Button(m_audioStreamer->getStatus() == AudioStreamer::Status::Playing ? ("  " ICON_LC_PAUSE "  ") : ("  " ICON_LC_PLAY "  "), ImVec2(controlWidth, buttonHeight)))
@@ -346,11 +351,13 @@ void Window::RenderPlaybackControls()
 	if (ImGui::Button(("  " ICON_LC_SKIP_FORWARD "  "), ImVec2(controlWidth, buttonHeight)))
 	{
 		//m_audioStreamer->playNext();
+		LOG_WARN("Play Next not implemented");
 	}
 	ImGui::SameLine();
 	if (ImGui::Button(("  " ICON_LC_SHUFFLE "  "), ImVec2(controlWidth, buttonHeight)))
 	{
 		//m_audioStreamer->toggleShuffle();
+		LOG_WARN("Shuffle not implemented");
 	}
 
 	ImGui::PopStyleVar();
@@ -389,91 +396,101 @@ std::string Window::FormatTime(double seconds)
 	return ss.str();
 }
 
-//void Window::RenderAudioFilters()
-//{
-//	ImGui::Spacing();
-//	ImGui::Separator();
-//	ImGui::Spacing();
-//
-//	// Start a group for the filters
-//	ImGui::BeginGroup();
-//
-//	// Calculate the widest label to align all sliders
-//	float maxLabelWidth = 0.0f;
-//	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_AUDIO_WAVEFORM "  LowPass").x);
-//	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_ACTIVITY "  HighPass").x);
-//	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_FAST_FORWARD "  Pitch").x);
-//	maxLabelWidth += ImGui::GetStyle().ItemSpacing.x; // Add some padding
-//
-//	// LowPass Control (50Hz - 2000Hz)
-//	ImGui::AlignTextToFramePadding();
-//	ImGui::Text(ICON_LC_AUDIO_WAVEFORM "  LowPass");
-//	ImGui::SameLine(maxLabelWidth);
-//	float bass = m_audioStreamer->getBass();
-//	ImGui::SetNextItemWidth(-1);
-//	if (ImGui::SliderFloat("##Bass", &bass, 0.0f, 100.0f, "%.0f%%"))
-//	{
-//		m_audioStreamer->setBass(bass);
-//	}
-//
-//	ImGui::Spacing();
-//
-//	// HighPass Control (2000Hz - 20000Hz)
-//	ImGui::AlignTextToFramePadding();
-//	ImGui::Text(ICON_LC_ACTIVITY "  HighPass");
-//	ImGui::SameLine(maxLabelWidth);
-//	float treble = m_audioStreamer->getTreble();
-//	ImGui::SetNextItemWidth(-1);
-//	if (ImGui::SliderFloat("##Treble", &treble, 0.0f, 100.0f, "%.0f%%"))
-//	{
-//		m_audioStreamer->setTreble(treble);
-//	}
-//
-//	// Pitch Control
-//	ImGui::Spacing();
-//	ImGui::AlignTextToFramePadding();
-//	ImGui::Text(ICON_LC_FAST_FORWARD "  Pitch");
-//	ImGui::SameLine(maxLabelWidth);
-//	float pitch = m_audioStreamer->getPitch();
-//	ImGui::SetNextItemWidth(-1);
-//	if (ImGui::SliderFloat("##Pitch", &pitch, 0.0f, 100.0f, "%.0f%%"))
-//	{
-//		m_audioStreamer->setPitch(pitch);
-//	}
-//	// Preset Buttons
-//	ImGui::Spacing();
-//	ImGui::Separator();
-//	ImGui::Spacing();
-//
-//	ImGui::Text("Fun Presets");
-//	ImGui::Spacing();
-//
-//	float buttonWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2) / 3;
-//
-//	if (ImGui::Button("Chipmunk Mode", ImVec2(buttonWidth, 35)))
-//	{
-//		m_audioStreamer->setPitch(50.0f);
-//		m_audioStreamer->setTreble(100.0f);
-//		m_audioStreamer->setBass(0.0f);
-//	}
-//	ImGui::SameLine();
-//	if (ImGui::Button("Slowed", ImVec2(buttonWidth, 35)))
-//	{
-//		m_audioStreamer->setPitch(25.0f);
-//		m_audioStreamer->setBass(35.0f);
-//		m_audioStreamer->setTreble(0.0f);
-//	}
-//	ImGui::SameLine();
-//	if (ImGui::Button("Reset", ImVec2(buttonWidth, 35)))
-//	{
-//		m_audioStreamer->setPitch(50.0f);
-//		m_audioStreamer->setTreble(0.0f);
-//		m_audioStreamer->setBass(100.0f);
-//	}
-//
-//	ImGui::EndGroup();
-//}
-//
+void Window::RenderAudioFilters()
+{
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
+
+	// Start a group for the filters
+	ImGui::BeginGroup();
+
+	// Calculate the widest label to align all sliders
+	float maxLabelWidth = 0.0f;
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_AUDIO_WAVEFORM "  LowPass").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_ACTIVITY "  HighPass").x);
+	maxLabelWidth = max(maxLabelWidth, ImGui::CalcTextSize(ICON_LC_FAST_FORWARD "  Pitch").x);
+	maxLabelWidth += ImGui::GetStyle().ItemSpacing.x; // Add some padding
+
+	ImGui::AlignTextToFramePadding();
+	ImGui::Text(ICON_LC_AUDIO_WAVEFORM "  Bass");
+	ImGui::SameLine(maxLabelWidth);
+	float bass = m_tonalityControl.getBass();
+	// scale the value to 0 to 100
+	bass = (bass + 1.0f) * 50.0f;
+
+	ImGui::SetNextItemWidth(-1);
+	if (ImGui::SliderFloat("##Bass", &bass, 0.0f, 100.0f, "%.0f%%"))
+	{
+		// scale it to -1 to 1
+		bass = (bass - 50.0f) / 50.0f;
+
+		m_tonalityControl.setBass(bass);
+	}
+
+	ImGui::Spacing();
+
+	ImGui::AlignTextToFramePadding();
+	ImGui::Text(ICON_LC_ACTIVITY "  Treble");
+	ImGui::SameLine(maxLabelWidth);
+	float treble = m_tonalityControl.getTreble();
+	// scale the value to 0 to 100
+	treble = (treble + 1.0f) * 50.0f;
+
+	ImGui::SetNextItemWidth(-1);
+	if (ImGui::SliderFloat("##Treble", &treble, 0.0f, 100.0f, "%.0f%%"))
+	{
+		// scale it to -1 to 1
+		treble = (treble - 50.0f) / 50.0f;
+
+		m_tonalityControl.setTreble(treble);
+	}
+
+	//// Pitch Control
+	//ImGui::Spacing();
+	//ImGui::AlignTextToFramePadding();
+	//ImGui::Text(ICON_LC_FAST_FORWARD "  Pitch");
+	//ImGui::SameLine(maxLabelWidth);
+	//float pitch = m_audioStreamer->getPitch();
+	//ImGui::SetNextItemWidth(-1);
+	//if (ImGui::SliderFloat("##Pitch", &pitch, 0.0f, 100.0f, "%.0f%%"))
+	//{
+	//	m_audioStreamer->setPitch(pitch);
+	//}
+	//// Preset Buttons
+	//ImGui::Spacing();
+	//ImGui::Separator();
+	//ImGui::Spacing();
+
+	//ImGui::Text("Fun Presets");
+	//ImGui::Spacing();
+
+	//float buttonWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2) / 3;
+
+	//if (ImGui::Button("Chipmunk Mode", ImVec2(buttonWidth, 35)))
+	//{
+	//	m_audioStreamer->setPitch(50.0f);
+	//	m_audioStreamer->setTreble(100.0f);
+	//	m_audioStreamer->setBass(0.0f);
+	//}
+	//ImGui::SameLine();
+	//if (ImGui::Button("Slowed", ImVec2(buttonWidth, 35)))
+	//{
+	//	m_audioStreamer->setPitch(25.0f);
+	//	m_audioStreamer->setBass(35.0f);
+	//	m_audioStreamer->setTreble(0.0f);
+	//}
+	//ImGui::SameLine();
+	//if (ImGui::Button("Reset", ImVec2(buttonWidth, 35)))
+	//{
+	//	m_audioStreamer->setPitch(50.0f);
+	//	m_audioStreamer->setTreble(0.0f);
+	//	m_audioStreamer->setBass(100.0f);
+	//}
+
+	ImGui::EndGroup();
+}
+
 //void Window::RenderVisualizer()
 //{
 //	float VISUALIZER_HEIGHT = 100.0f;

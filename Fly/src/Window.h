@@ -4,6 +4,7 @@
 #include "IconsLucide.h"
 #include "MP3Streamer.h"
 #include "PlayList.h"
+#include "TonalityControl.h"
 
 namespace HelloImGui
 {
@@ -28,7 +29,7 @@ private:
 	void RenderTimeDisplay();
 	void RenderPlaybackControls();
 	void RenderVolumeControl();
-	// void RenderAudioFilters();
+	void RenderAudioFilters();
 	// void RenderVisualizer();
 	// void RenderSpatialControl();
 
@@ -37,6 +38,8 @@ private:
 private:
 	std::unique_ptr<MP3Streamer> m_audioStreamer;
 	std::unique_ptr<Playlist> m_playlist;
+	TonalityControl m_tonalityControl;
+
 	bool m_showFileDialog = false;
 	std::string m_selectedFile;
 	FileDialog m_dialog;

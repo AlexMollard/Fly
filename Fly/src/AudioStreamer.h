@@ -110,7 +110,10 @@ public:
 	float getDuration() const;
 
 	// Effects
-	void setEffectProcessor(EffectProcessor processor);
+	void setEffectProcessor(EffectProcessor processor)
+	{
+		m_effectProcessor = processor;
+	}
 
 	void clearEffectProcessor()
 	{
