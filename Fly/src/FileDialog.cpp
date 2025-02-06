@@ -378,6 +378,7 @@ void FileDialog::RenderFileList()
 				if (ImGui::IsMouseClicked(0))
 				{
 					m_selected_file = path.string();
+					m_show_dialog = false;
 				}
 			}
 

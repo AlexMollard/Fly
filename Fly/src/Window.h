@@ -2,7 +2,8 @@
 
 #include "FileDialog.h"
 #include "IconsLucide.h"
-#include "MP3Player.h"
+#include "MP3Streamer.h"
+#include "PlayList.h"
 
 namespace HelloImGui
 {
@@ -27,16 +28,17 @@ private:
 	void RenderTimeDisplay();
 	void RenderPlaybackControls();
 	void RenderVolumeControl();
-	void RenderAudioFilters();
-	void RenderVisualizer();
-	void RenderSpatialControl();
+	// void RenderAudioFilters();
+	// void RenderVisualizer();
+	// void RenderSpatialControl();
 
 	std::string FormatTime(double seconds);
 
 private:
-	std::unique_ptr<MP3Player> m_mp3Player;
-	bool m_show_file_dialog;
-	std::string m_selected_file;
+	std::unique_ptr<MP3Streamer> m_audioStreamer;
+	std::unique_ptr<Playlist> m_playlist;
+	bool m_showFileDialog = false;
+	std::string m_selectedFile;
 	FileDialog m_dialog;
 
 	// Spatial audio animation state
