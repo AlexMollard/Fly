@@ -4,7 +4,8 @@
 
 #include <hello_imgui/hello_imgui.h>
 
-Window::Window(HelloImGui::RunnerParams& params) : m_dialog(m_showFileDialog, m_selectedFile)
+Window::Window(HelloImGui::RunnerParams& params)
+      : m_dialog(m_showFileDialog, m_selectedFile)
 {
 	params.callbacks.SetupImGuiStyle = [this]() { GuiSetup(); };
 
@@ -46,6 +47,7 @@ void Window::Render()
 		{
 			m_audioStreamer.OpenFromFile(m_selectedFile);
 			m_audioStreamer.Play();
+			m_tonalityControl.SetSource(m_audioStreamer.GetSource());
 			m_playlist.AddTrack(m_selectedFile);
 			m_selectedFile.clear();
 		}
@@ -65,7 +67,7 @@ void Window::Render()
 void Window::RenderPlaylistPanel(float width, float height)
 {
 	// Calculate the heights
-	float controlsHeight = height * 0.125f;           // 12% of window height
+	float controlsHeight = height * 0.125f;         // 12% of window height
 	float playlistHeight = height - controlsHeight; // Remaining 90%
 
 	// Main playlist panel
@@ -86,6 +88,7 @@ void Window::RenderPlaylistPanel(float width, float height)
 		{
 			m_audioStreamer.OpenFromFile(tracks[i]);
 			m_audioStreamer.Play();
+			m_tonalityControl.SetSource(m_audioStreamer.GetSource());
 		}
 	}
 	ImGui::EndChild();
@@ -495,8 +498,20 @@ void Window::RenderAudioFilters()
 	{
 		// scale it to -1 to 1
 		treble = (treble - 50.0f) / 50.0f;
-
 		m_tonalityControl.SetTreble(treble);
+	}
+
+	ImGui::Spacing();
+
+	ImGui::AlignTextToFramePadding();
+	ImGui::Text(ICON_LC_FAST_FORWARD "  Pitch");
+	ImGui::SameLine(maxLabelWidth);
+	float pitch = m_tonalityControl.GetPitch();
+
+	ImGui::SetNextItemWidth(-1);
+	if (ImGui::SliderFloat("##Pitch", &pitch, -12.0f, 12.0f, "%.1f semitones"))
+	{
+		m_tonalityControl.SetPitch(pitch);
 	}
 
 	ImGui::EndGroup();
@@ -580,7 +595,6 @@ void Window::RenderVisualizer()
 		ImGui::PopStyleVar();
 		ImGui::EndChild();
 	}
-
 }
 
 void Window::RenderSpatialControl()

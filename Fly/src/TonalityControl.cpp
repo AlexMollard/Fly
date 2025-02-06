@@ -28,6 +28,16 @@ float TonalityControl::GetTreble() const
 	return m_inTreble;
 }
 
+void TonalityControl::SetPitch(float level)
+{
+	m_pitchShifter.SetPitch(level);
+}
+
+float TonalityControl::GetPitch() const
+{
+	return m_pitchShifter.GetPitch();
+}
+
 std::function<void(std::vector<float>&, unsigned int, unsigned int)> TonalityControl::CreateProcessor()
 {
 	return [this](std::vector<float>& buffer, unsigned int channels, unsigned int sampleRate)
@@ -47,10 +57,9 @@ std::function<void(std::vector<float>&, unsigned int, unsigned int)> TonalityCon
 		const float trebleQ = 0.5f;        // Lower Q for wider effect
 
 		auto [b0_bass, b1_bass, b2_bass, a1_bass, a2_bass] = CalculateShelfCoefficients(bassFreq, bassQ, m_bassGain, static_cast<float>(sampleRate), true);
-
 		auto [b0_treble, b1_treble, b2_treble, a1_treble, a2_treble] = CalculateShelfCoefficients(trebleFreq, trebleQ, m_trebleGain, static_cast<float>(sampleRate), false);
 
-		// Rest of the processing remains the same
+		// Process EQ
 		for (size_t i = 0; i < buffer.size(); i += channels)
 		{
 			for (unsigned int ch = 0; ch < channels; ch++)

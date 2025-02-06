@@ -49,5 +49,4 @@ private:
 	AudioVisualizer m_visualizer;
 
 	std::vector<float> m_sampleBuffer;
-	static constexpr std::size_t BUFFER_SIZE = 16384; // Buffer size in samples (Might move into the cpp file)
 };

@@ -35,7 +35,6 @@ public:
 	{
 		unsigned int channelCount{ 2 };
 		unsigned int sampleRate{ 44100 };
-		unsigned int bufferSize{ 16384 }; // 16KB chunks
 		unsigned int numBuffers{ 4 };
 	};
 
@@ -132,6 +131,11 @@ public:
 	std::pair<float, float> GetListenerPosition() const
 	{
 		return { m_listenerX, m_listenerZ };
+	}
+
+	ALuint GetSource() const
+	{
+		return m_source;
 	}
 
 protected:

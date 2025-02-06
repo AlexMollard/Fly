@@ -1,4 +1,5 @@
 #pragma once
+#include "PitchShifter.h"
 
 class TonalityControl
 {
@@ -18,7 +19,16 @@ private:
 	std::vector<FilterState> m_bassState;
 	std::vector<FilterState> m_trebleState;
 
+	ALuint m_source{ 0 };
+	PitchShifter m_pitchShifter;
+
 public:
+	void SetSource(ALuint source)
+	{
+		m_source = source;
+		m_pitchShifter.SetSource(source);
+	}
+
 	// Set bass level (-1.0 to 1.0, where 0.0 is neutral)
 	void SetBass(float level);
 	float GetBass() const;
@@ -26,6 +36,10 @@ public:
 	// Set treble level (-1.0 to 1.0, where 0.0 is neutral)
 	void SetTreble(float level);
 	float GetTreble() const;
+
+	// Set pitch level (-1.0 to 1.0, where 0.0 is neutral)
+	void SetPitch(float level);
+	float GetPitch() const;
 
 	// This will make it into a lambda function for the audio streamer
 	std::function<void(std::vector<float>&, unsigned int, unsigned int)> CreateProcessor();

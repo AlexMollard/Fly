@@ -23,4 +23,6 @@
 #include <imgui.h>
 
 // My files
+#define AUDIO_STREAM_BUFFER_SIZE 32768 // 32 KB
+
 #include "util/Logger.h"

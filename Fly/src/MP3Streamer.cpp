@@ -7,7 +7,7 @@
 MP3Streamer::MP3Streamer()
 {
 	// Initialize sample buffer
-	m_sampleBuffer.resize(BUFFER_SIZE);
+	m_sampleBuffer.resize(AUDIO_STREAM_BUFFER_SIZE);
 }
 
 MP3Streamer::~MP3Streamer()
@@ -58,7 +58,6 @@ bool MP3Streamer::OpenFromFile(const std::string& filename)
 	StreamingConfig config;
 	config.channelCount = static_cast<unsigned int>(m_fileInfo.channels);
 	config.sampleRate = static_cast<unsigned int>(m_fileInfo.samplerate);
-	config.bufferSize = BUFFER_SIZE;
 	Init(config);
 
 	// Setup the trackInfo with null checks
@@ -71,7 +70,7 @@ bool MP3Streamer::OpenFromFile(const std::string& filename)
 	m_trackInfo.year = sf_get_string(m_file, SF_STR_DATE) ? sf_get_string(m_file, SF_STR_DATE) : "";
 
 	m_trackInfo.duration = static_cast<float>(m_fileInfo.frames) / m_fileInfo.samplerate;
-
+	
 	return true;
 }
 
@@ -117,7 +116,7 @@ bool MP3Streamer::OnGetData(AudioChunk& chunk)
 		return false;
 
 	// Read audio data
-	static sf_count_t framesToRead = BUFFER_SIZE / m_fileInfo.channels;
+	static sf_count_t framesToRead = AUDIO_STREAM_BUFFER_SIZE / m_fileInfo.channels;
 	sf_count_t framesRead = sf_readf_float(m_file, m_sampleBuffer.data(), framesToRead);
 
 	if (framesRead > 0)

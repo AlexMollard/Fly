@@ -96,6 +96,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\PitchShifter.cpp" />
     <ClCompile Include="src\PlayList.cpp" />
     <ClCompile Include="src\MP3Streamer.cpp" />
     <ClCompile Include="src\pch.cpp">
@@ -111,6 +112,7 @@
     <ClCompile Include="src\TonalityControl.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\PitchShifter.h" />
     <ClInclude Include="src\PlayList.h" />
     <ClInclude Include="src\MP3Streamer.h" />
     <ClInclude Include="src\containers\ThreadSafeQueue.h" />
