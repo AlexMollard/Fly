@@ -66,22 +66,22 @@ public:
 	AudioStreamer& operator=(AudioStreamer&& other) noexcept;
 
 	// Core functionality
-	void initialize(const StreamingConfig& config);
-	void createAndFillBuffers(bool recreateBuffers);
-	void play();
-	void pause();
-	void stop(bool clearInfo = false);
-	void cleanup();
+	void Init(const StreamingConfig& config);
+	void CreateAndFillBuffers(bool recreateBuffers);
+	void Play();
+	void Pause();
+	void Stop(bool clearInfo = false);
+	void Cleanup();
 
 	// State control
-	void setLooping(bool loop);
+	void SetLooping(bool loop);
 
-	bool isLooping() const
+	bool IsLooping() const
 	{
 		return m_looping;
 	}
 
-	Status getStatus() const
+	Status GetStatus() const
 	{
 		return m_status;
 	}
@@ -89,55 +89,55 @@ public:
 	// Audio properties
 	void setVolume(float newVolume);
 
-	float getVolume() const
+	float GetVolume() const
 	{
 		return m_volume;
 	}
 
-	unsigned int getChannelCount() const
+	unsigned int GetChannelCount() const
 	{
 		return m_config.channelCount;
 	}
 
-	unsigned int getSampleRate() const
+	unsigned int GetSampleRate() const
 	{
 		return m_config.sampleRate;
 	}
 
 	// Position control
-	void setPlayingOffset(double timeOffset);
-	double getPlayingOffset() const;
-	float getDuration() const;
+	void SetPlayingOffset(double timeOffset);
+	double GetPlayingOffset() const;
+	float GetDuration() const;
 
 	// Effects
-	void setEffectProcessor(EffectProcessor processor)
+	void SetEffectProcessor(EffectProcessor processor)
 	{
 		m_effectProcessor = processor;
 	}
 
-	void clearEffectProcessor()
+	void ClearEffectProcessor()
 	{
 		m_effectProcessor = nullptr;
 	}
 
 protected:
 	// Virtual methods for derived classes
-	virtual bool onGetData(AudioChunk& chunk) = 0;
-	virtual void onSeek(double timeOffset) = 0;
-	virtual std::optional<std::size_t> onLoop();
+	virtual bool OnGetData(AudioChunk& chunk) = 0;
+	virtual void OnSeek(double timeOffset) = 0;
+	virtual std::optional<std::size_t> OnLoop();
 
 	// Returns total number of samples in the stream
-	virtual float onGetDuration() const = 0;
+	virtual float OnGetDuration() const = 0;
 
 	// Track info
 	AudioStreamer::TrackInfo m_trackInfo{};
 
 private:
-	void initializeOpenAL();
-	void cleanupOpenAL();
-	void streamingThreadFunc();
-	void updateBufferStream();
-	void checkAlError(const char* operation);
+	void InitOpenAL();
+	void CleanupOpenAL();
+	void StreamingThreadFunc();
+	void UpdateBufferStream();
+	void CheckAlError(const char* operation);
 
 	// OpenAL state
 	ALCdevice* m_device{ nullptr };

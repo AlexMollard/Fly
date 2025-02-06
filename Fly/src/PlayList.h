@@ -10,27 +10,27 @@ public:
 	Playlist() = default;
 
 	// Add/Remove tracks
-	void addTrack(const std::string& filepath);
-	void removeTrack(size_t index);
-	void clear();
+	void AddTrack(const std::string& filepath);
+	void RemoveTrack(size_t index);
+	void Clear();
 
 	// Track management
-	bool next();
-	bool previous();
-	bool jumpToTrack(size_t index);
+	bool Next();
+	bool Previous();
+	bool JumpToTrack(size_t index);
 
 	// Playlist properties
-	size_t size() const;
-	bool isEmpty() const;
+	size_t Size() const;
+	bool IsEmpty() const;
 
 	// Current track info
-	size_t getCurrentIndex() const;
-	std::string getCurrentTrack() const;
-	std::vector<std::string> getTracks() const;
+	size_t GetCurrentIndex() const;
+	std::string GetCurrentTrack() const;
+	std::vector<std::string> GetTracks() const;
 
 	// Shuffle functionality
-	void toggleShuffle();
-	bool isShuffleEnabled() const;
+	void ToggleShuffle();
+	bool IsShuffleEnabled() const;
 
 private:
 	std::vector<std::string> m_tracks;
@@ -38,5 +38,5 @@ private:
 	size_t m_currentIndex = 0;
 	bool m_shuffleEnabled = false;
 
-	void updateShuffleIndices();
+	void UpdateShuffleIndices();
 };

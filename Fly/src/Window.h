@@ -5,6 +5,7 @@
 #include "MP3Streamer.h"
 #include "PlayList.h"
 #include "TonalityControl.h"
+#include "AudioVisualizer.h"
 
 namespace HelloImGui
 {
@@ -30,15 +31,16 @@ private:
 	void RenderPlaybackControls();
 	void RenderVolumeControl();
 	void RenderAudioFilters();
-	// void RenderVisualizer();
+	void RenderVisualizer();
 	// void RenderSpatialControl();
 
 	std::string FormatTime(double seconds);
 
 private:
-	std::unique_ptr<MP3Streamer> m_audioStreamer;
-	std::unique_ptr<Playlist> m_playlist;
+	MP3Streamer m_audioStreamer;
+	Playlist m_playlist;
 	TonalityControl m_tonalityControl;
+	AudioVisualizer m_visualizer;
 
 	bool m_showFileDialog = false;
 	std::string m_selectedFile;

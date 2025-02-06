@@ -20,20 +20,20 @@ private:
 
 public:
 	// Set bass level (-1.0 to 1.0, where 0.0 is neutral)
-	void setBass(float level);
-	float getBass() const;
+	void SetBass(float level);
+	float GetBass() const;
 
 	// Set treble level (-1.0 to 1.0, where 0.0 is neutral)
-	void setTreble(float level);
-	float getTreble() const;
+	void SetTreble(float level);
+	float GetTreble() const;
 
 	// This will make it into a lambda function for the audio streamer
-	std::function<void(std::vector<float>&, unsigned int, unsigned int)> createProcessor();
+	std::function<void(std::vector<float>&, unsigned int, unsigned int)> CreateProcessor();
 
 private:
 	// Calculate coefficients for shelf filter
-	std::tuple<float, float, float, float, float> calculateShelfCoefficients(float frequency, float Q, float gain, float sampleRate, bool isLowShelf);
+	std::tuple<float, float, float, float, float> CalculateShelfCoefficients(float frequency, float Q, float gain, float sampleRate, bool isLowShelf);
 
 	// Process a single sample through the filter
-	float processSample(float input, float b0, float b1, float b2, float a1, float a2, FilterState& state);
+	float ProcessSample(float input, float b0, float b1, float b2, float a1, float a2, FilterState& state);
 };

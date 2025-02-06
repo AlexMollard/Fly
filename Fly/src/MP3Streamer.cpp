@@ -12,7 +12,7 @@ MP3Streamer::MP3Streamer()
 
 MP3Streamer::~MP3Streamer()
 {
-	cleanup();
+	Cleanup();
 }
 
 MP3Streamer::MP3Streamer(MP3Streamer&& other) noexcept
@@ -27,7 +27,7 @@ MP3Streamer& MP3Streamer::operator=(MP3Streamer&& other) noexcept
 	if (this != &other)
 	{
 		AudioStreamer::operator=(std::move(other));
-		cleanup();
+		Cleanup();
 
 		m_file = std::exchange(other.m_file, nullptr);
 		m_fileInfo = other.m_fileInfo;
@@ -39,10 +39,10 @@ MP3Streamer& MP3Streamer::operator=(MP3Streamer&& other) noexcept
 	return *this;
 }
 
-bool MP3Streamer::openFromFile(const std::string& filename)
+bool MP3Streamer::OpenFromFile(const std::string& filename)
 {
 	// Cleanup any existing file
-	cleanup();
+	Cleanup();
 
 	// Initialize file info
 	std::memset(&m_fileInfo, 0, sizeof(SF_INFO));
@@ -59,7 +59,7 @@ bool MP3Streamer::openFromFile(const std::string& filename)
 	config.channelCount = static_cast<unsigned int>(m_fileInfo.channels);
 	config.sampleRate = static_cast<unsigned int>(m_fileInfo.samplerate);
 	config.bufferSize = BUFFER_SIZE;
-	initialize(config);
+	Init(config);
 
 	// Setup the trackInfo with null checks
 	const char* title = sf_get_string(m_file, SF_STR_TITLE);
@@ -76,7 +76,7 @@ bool MP3Streamer::openFromFile(const std::string& filename)
 	return true;
 }
 
-void MP3Streamer::cleanup()
+void MP3Streamer::Cleanup()
 {
 	if (m_file)
 	{
@@ -86,10 +86,10 @@ void MP3Streamer::cleanup()
 	std::memset(&m_fileInfo, 0, sizeof(SF_INFO));
 }
 
-void MP3Streamer::close()
+void MP3Streamer::Close()
 {
-	stop();
-	cleanup();
+	Stop();
+	Cleanup();
 }
 
 const AudioStreamer::TrackInfo& MP3Streamer::GetTrackInfo()
@@ -97,7 +97,7 @@ const AudioStreamer::TrackInfo& MP3Streamer::GetTrackInfo()
 	return m_trackInfo;
 }
 
-bool MP3Streamer::onGetData(AudioChunk& chunk)
+bool MP3Streamer::OnGetData(AudioChunk& chunk)
 {
 	if (!m_file)
 		return false;
@@ -117,7 +117,7 @@ bool MP3Streamer::onGetData(AudioChunk& chunk)
 	return false;
 }
 
-void MP3Streamer::onSeek(double timeOffset)
+void MP3Streamer::OnSeek(double timeOffset)
 {
 	if (!m_file)
 		return;
@@ -131,7 +131,7 @@ void MP3Streamer::onSeek(double timeOffset)
 	sf_seek(m_file, frame, SEEK_SET);
 }
 
-float MP3Streamer::onGetDuration() const
+float MP3Streamer::OnGetDuration() const
 {
 	if (!m_file)
 		return 0;
@@ -139,7 +139,7 @@ float MP3Streamer::onGetDuration() const
 	return m_trackInfo.duration;
 }
 
-std::optional<std::size_t> MP3Streamer::onLoop()
+std::optional<std::size_t> MP3Streamer::OnLoop()
 {
 	if (!m_file)
 		return std::nullopt;

@@ -6,16 +6,16 @@
 #include <random>
 #include <numeric>
 
-void Playlist::addTrack(const std::string& filepath)
+void Playlist::AddTrack(const std::string& filepath)
 {
 	m_tracks.push_back(filepath);
 	if (m_shuffleEnabled)
 	{
-		updateShuffleIndices();
+		UpdateShuffleIndices();
 	}
 }
 
-void Playlist::removeTrack(size_t index)
+void Playlist::RemoveTrack(size_t index)
 {
 	if (index >= m_tracks.size())
 		return;
@@ -33,18 +33,18 @@ void Playlist::removeTrack(size_t index)
 	m_tracks.erase(m_tracks.begin() + index);
 	if (m_shuffleEnabled)
 	{
-		updateShuffleIndices();
+		UpdateShuffleIndices();
 	}
 }
 
-void Playlist::clear()
+void Playlist::Clear()
 {
 	m_tracks.clear();
 	m_shuffleIndices.clear();
 	m_currentIndex = 0;
 }
 
-bool Playlist::next()
+bool Playlist::Next()
 {
 	if (m_tracks.empty())
 		return false;
@@ -70,7 +70,7 @@ bool Playlist::next()
 	}
 }
 
-bool Playlist::previous()
+bool Playlist::Previous()
 {
 	if (m_tracks.empty() || m_currentIndex == 0)
 		return false;
@@ -92,7 +92,7 @@ bool Playlist::previous()
 	}
 }
 
-bool Playlist::jumpToTrack(size_t index)
+bool Playlist::JumpToTrack(size_t index)
 {
 	if (index >= m_tracks.size())
 		return false;
@@ -100,48 +100,48 @@ bool Playlist::jumpToTrack(size_t index)
 	return true;
 }
 
-size_t Playlist::size() const
+size_t Playlist::Size() const
 {
 	return m_tracks.size();
 }
 
-bool Playlist::isEmpty() const
+bool Playlist::IsEmpty() const
 {
 	return m_tracks.empty();
 }
 
-size_t Playlist::getCurrentIndex() const
+size_t Playlist::GetCurrentIndex() const
 {
 	return m_currentIndex;
 }
 
-std::string Playlist::getCurrentTrack() const
+std::string Playlist::GetCurrentTrack() const
 {
 	if (m_tracks.empty())
 		return "";
 	return m_tracks[m_currentIndex];
 }
 
-std::vector<std::string> Playlist::getTracks() const
+std::vector<std::string> Playlist::GetTracks() const
 {
 	return m_tracks;
 }
 
-void Playlist::toggleShuffle()
+void Playlist::ToggleShuffle()
 {
 	m_shuffleEnabled = !m_shuffleEnabled;
 	if (m_shuffleEnabled)
 	{
-		updateShuffleIndices();
+		UpdateShuffleIndices();
 	}
 }
 
-bool Playlist::isShuffleEnabled() const
+bool Playlist::IsShuffleEnabled() const
 {
 	return m_shuffleEnabled;
 }
 
-void Playlist::updateShuffleIndices()
+void Playlist::UpdateShuffleIndices()
 {
 	m_shuffleIndices.resize(m_tracks.size());
 	std::iota(m_shuffleIndices.begin(), m_shuffleIndices.end(), 0);

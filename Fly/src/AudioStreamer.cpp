@@ -12,13 +12,13 @@ AudioStreamer::AudioStreamer()
 	LOG_DEBUG("Initializing AudioStreamer");
 	try
 	{
-		initializeOpenAL();
+		InitOpenAL();
 		LOG_INFO("AudioStreamer successfully initialized");
 	}
 	catch ([[maybe_unused]] const std::exception& e)
 	{
 		LOG_ERROR("Failed to initialize AudioStreamer: {}", e.what());
-		cleanup();
+		Cleanup();
 		throw;
 	}
 }
@@ -26,7 +26,7 @@ AudioStreamer::AudioStreamer()
 AudioStreamer::~AudioStreamer()
 {
 	LOG_DEBUG("Destroying AudioStreamer");
-	cleanup();
+	Cleanup();
 }
 
 AudioStreamer::AudioStreamer(AudioStreamer&& other) noexcept
@@ -51,7 +51,7 @@ AudioStreamer& AudioStreamer::operator=(AudioStreamer&& other) noexcept
 {
 	if (this != &other)
 	{
-		cleanup();
+		Cleanup();
 
 		m_device = std::exchange(other.m_device, nullptr);
 		m_context = std::exchange(other.m_context, nullptr);
@@ -72,7 +72,7 @@ AudioStreamer& AudioStreamer::operator=(AudioStreamer&& other) noexcept
 	return *this;
 }
 
-void AudioStreamer::initializeOpenAL()
+void AudioStreamer::InitOpenAL()
 {
 	LOG_DEBUG("Initializing OpenAL");
 
@@ -125,7 +125,7 @@ void AudioStreamer::initializeOpenAL()
 
 	// Generate source
 	alGenSources(1, &m_source);
-	checkAlError("Failed to generate source");
+	CheckAlError("Failed to generate source");
 	LOG_DEBUG("OpenAL source generated successfully");
 
 	// Configure source properties
@@ -136,12 +136,12 @@ void AudioStreamer::initializeOpenAL()
 
 	// Start streaming thread
 	m_isRunning = true;
-	m_streamingThread = std::thread(&AudioStreamer::streamingThreadFunc, this);
+	m_streamingThread = std::thread(&AudioStreamer::StreamingThreadFunc, this);
 	SetThreadDescription(m_streamingThread.native_handle(), L"AudioStreamer");
 	LOG_INFO("Streaming thread started");
 }
 
-void AudioStreamer::cleanup()
+void AudioStreamer::Cleanup()
 {
 	LOG_DEBUG("Starting AudioStreamer cleanup");
 	m_isRunning = false;
@@ -153,11 +153,11 @@ void AudioStreamer::cleanup()
 		m_streamingThread.join();
 	}
 
-	cleanupOpenAL();
+	CleanupOpenAL();
 	LOG_INFO("AudioStreamer cleanup completed");
 }
 
-void AudioStreamer::cleanupOpenAL()
+void AudioStreamer::CleanupOpenAL()
 {
 	LOG_DEBUG("Starting OpenAL cleanup");
 
@@ -191,7 +191,7 @@ void AudioStreamer::cleanupOpenAL()
 	}
 }
 
-void AudioStreamer::streamingThreadFunc()
+void AudioStreamer::StreamingThreadFunc()
 {
 	LOG_DEBUG("Streaming thread started");
 	while (m_isRunning)
@@ -199,14 +199,14 @@ void AudioStreamer::streamingThreadFunc()
 		if (m_status == Status::Playing)
 		{
 			std::lock_guard<std::recursive_mutex> lock(m_streamMutex);
-			updateBufferStream();
+			UpdateBufferStream();
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 	LOG_DEBUG("Streaming thread stopped");
 }
 
-void AudioStreamer::updateBufferStream()
+void AudioStreamer::UpdateBufferStream()
 {
 	ALint processed = 0;
 	alGetSourcei(m_source, AL_BUFFERS_PROCESSED, &processed);
@@ -215,10 +215,10 @@ void AudioStreamer::updateBufferStream()
 	{
 		ALuint buffer;
 		alSourceUnqueueBuffers(m_source, 1, &buffer);
-		checkAlError("Failed to unqueue buffer");
+		CheckAlError("Failed to unqueue buffer");
 
 		AudioChunk chunk;
-		bool gotData = onGetData(chunk);
+		bool gotData = OnGetData(chunk);
 
 		if (gotData && chunk.samples && chunk.sampleCount > 0)
 		{
@@ -247,9 +247,9 @@ void AudioStreamer::updateBufferStream()
 
 			alBufferData(buffer, m_config.channelCount == 1 ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16, convertedBuffer.data(), static_cast<ALsizei>(chunk.sampleCount * sizeof(int16_t)), m_config.sampleRate);
 
-			checkAlError("Failed to buffer audio data");
+			CheckAlError("Failed to buffer audio data");
 			alSourceQueueBuffers(m_source, 1, &buffer);
-			checkAlError("Failed to queue buffer");
+			CheckAlError("Failed to queue buffer");
 
 			m_samplesProcessed += chunk.sampleCount;
 		}
@@ -270,12 +270,12 @@ void AudioStreamer::updateBufferStream()
 		{
 			LOG_INFO("Restarting playback with {} buffers queued", queued);
 			alSourcePlay(m_source);
-			checkAlError("Failed to restart playback");
+			CheckAlError("Failed to restart playback");
 		}
 	}
 }
 
-void AudioStreamer::play()
+void AudioStreamer::Play()
 {
 	if (m_status != Status::Playing)
 	{
@@ -285,7 +285,7 @@ void AudioStreamer::play()
 		{
 			LOG_INFO("Starting playback with {} buffers queued", queued);
 			alSourcePlay(m_source);
-			checkAlError("Failed to start playback");
+			CheckAlError("Failed to start playback");
 			m_status = Status::Playing;
 		}
 		else
@@ -295,22 +295,22 @@ void AudioStreamer::play()
 	}
 }
 
-void AudioStreamer::pause()
+void AudioStreamer::Pause()
 {
 	if (m_status == Status::Playing)
 	{
 		LOG_INFO("Pausing playback");
 		alSourcePause(m_source);
-		checkAlError("Failed to pause playback");
+		CheckAlError("Failed to pause playback");
 		m_status = Status::Paused;
 	}
 }
 
-void AudioStreamer::stop(bool clearInfo)
+void AudioStreamer::Stop(bool clearInfo)
 {
 	LOG_INFO("Stopping playback");
 	alSourceStop(m_source);
-	checkAlError("Failed to stop playback");
+	CheckAlError("Failed to stop playback");
 	m_status = Status::Stopped;
 	m_samplesProcessed = 0;
 	
@@ -328,29 +328,29 @@ void AudioStreamer::setVolume(float newVolume)
 	LOG_DEBUG("Volume set to {}", m_volume.load());
 }
 
-void AudioStreamer::setLooping(bool shouldLoop)
+void AudioStreamer::SetLooping(bool shouldLoop)
 {
 	m_looping = shouldLoop;
 	alSourcei(m_source, AL_LOOPING, shouldLoop ? AL_TRUE : AL_FALSE);
 	LOG_INFO("Looping {} for audio source", shouldLoop ? "enabled" : "disabled");
 }
 
-std::optional<std::size_t> AudioStreamer::onLoop()
+std::optional<std::size_t> AudioStreamer::OnLoop()
 {
-	setPlayingOffset(0.0);
+	SetPlayingOffset(0.0);
 
 	return 0;
 }
 
-float AudioStreamer::getDuration() const
+float AudioStreamer::GetDuration() const
 {
 	if (m_config.sampleRate == 0)
 		return 0.0;
 
-	return onGetDuration();
+	return OnGetDuration();
 }
 
-double AudioStreamer::getPlayingOffset() const
+double AudioStreamer::GetPlayingOffset() const
 {
 	ALint sampleOffset;
 
@@ -359,7 +359,7 @@ double AudioStreamer::getPlayingOffset() const
 }
 
 
-void AudioStreamer::setPlayingOffset(double timeOffset)
+void AudioStreamer::SetPlayingOffset(double timeOffset)
 {
 	if (m_config.sampleRate == 0)
 	{
@@ -370,19 +370,19 @@ void AudioStreamer::setPlayingOffset(double timeOffset)
 	LOG_INFO("Setting playing offset to {} seconds", timeOffset);
 	std::lock_guard<std::recursive_mutex> lock(m_streamMutex);
 
-	stop();
+	Stop();
 
 	std::size_t frame = static_cast<std::size_t>(timeOffset * m_config.sampleRate);
 	m_samplesProcessed = frame * m_config.channelCount;
 
-	onSeek(timeOffset);
+	OnSeek(timeOffset);
 
-	createAndFillBuffers(false); // false = don't recreate existing buffers
+	CreateAndFillBuffers(false); // false = don't recreate existing buffers
 
-	play();
+	Play();
 }
 
-void AudioStreamer::checkAlError(const char* operation)
+void AudioStreamer::CheckAlError(const char* operation)
 {
 	ALenum error = alGetError();
 	if (error != AL_NO_ERROR)
@@ -392,21 +392,21 @@ void AudioStreamer::checkAlError(const char* operation)
 	}
 }
 
-void AudioStreamer::initialize(const StreamingConfig& newConfig)
+void AudioStreamer::Init(const StreamingConfig& newConfig)
 {
 	LOG_INFO("Initializing stream with {} channels, {} Hz sample rate, {} buffers", newConfig.channelCount, newConfig.sampleRate, newConfig.numBuffers);
 	m_samplesProcessed = 0;
 	m_config = newConfig;
 
-	stop(true); // false = clear track info as a new track is being loaded
+	Stop(true); // false = clear track info as a new track is being loaded
 
-	createAndFillBuffers(false); // false = don't recreate if buffers exist
+	CreateAndFillBuffers(false); // false = don't recreate if buffers exist
 
 	m_status = Status::Playing;
-	play();
+	Play();
 }
 
-void AudioStreamer::createAndFillBuffers(bool recreateBuffers)
+void AudioStreamer::CreateAndFillBuffers(bool recreateBuffers)
 {
 	if (recreateBuffers && !m_buffers.empty())
 	{
@@ -420,7 +420,7 @@ void AudioStreamer::createAndFillBuffers(bool recreateBuffers)
 		LOG_DEBUG("Generating {} OpenAL buffers", m_config.numBuffers);
 		m_buffers.resize(m_config.numBuffers);
 		alGenBuffers(m_config.numBuffers, m_buffers.data());
-		checkAlError("Failed to generate buffers");
+		CheckAlError("Failed to generate buffers");
 	}
 	else
 	{
@@ -431,7 +431,7 @@ void AudioStreamer::createAndFillBuffers(bool recreateBuffers)
 		{
 			LOG_DEBUG("Clearing {} queued buffers", queued);
 			alSourcei(m_source, AL_BUFFER, 0);
-			checkAlError("Failed to clear queued buffers");
+			CheckAlError("Failed to clear queued buffers");
 		}
 	}
 
@@ -439,7 +439,7 @@ void AudioStreamer::createAndFillBuffers(bool recreateBuffers)
 	for (ALuint buffer: m_buffers)
 	{
 		AudioChunk chunk;
-		bool gotData = onGetData(chunk);
+		bool gotData = OnGetData(chunk);
 
 		if (gotData && chunk.samples && chunk.sampleCount > 0)
 		{
@@ -456,10 +456,10 @@ void AudioStreamer::createAndFillBuffers(bool recreateBuffers)
 
 
 			alBufferData(buffer, m_config.channelCount == 1 ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16, convertedBuffer.data(), static_cast<ALsizei>(chunk.sampleCount * sizeof(int16_t)), m_config.sampleRate);
-			checkAlError("Failed to fill initial buffer");
+			CheckAlError("Failed to fill initial buffer");
 
 			alSourceQueueBuffers(m_source, 1, &buffer);
-			checkAlError("Failed to queue initial buffer");
+			CheckAlError("Failed to queue initial buffer");
 
 			m_samplesProcessed += chunk.sampleCount;
 		}

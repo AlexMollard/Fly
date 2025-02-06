@@ -21,21 +21,21 @@ public:
 	MP3Streamer& operator=(MP3Streamer&& other) noexcept;
 
 	// File operations
-	bool openFromFile(const std::string& filename);
-	void close();
+	bool OpenFromFile(const std::string& filename);
+	void Close();
 
 	// Get Info
 	const AudioStreamer::TrackInfo& GetTrackInfo();
 
 protected:
 	// AudioStreamer interface implementation
-	bool onGetData(AudioChunk& chunk) override;
-	void onSeek(double timeOffset) override;
-	float onGetDuration() const override;
-	std::optional<std::size_t> onLoop() override;
+	bool OnGetData(AudioChunk& chunk) override;
+	void OnSeek(double timeOffset) override;
+	float OnGetDuration() const override;
+	std::optional<std::size_t> OnLoop() override;
 
 private:
-	void cleanup();
+	void Cleanup();
 
 	SNDFILE* m_file{ nullptr };
 	SF_INFO m_fileInfo{};

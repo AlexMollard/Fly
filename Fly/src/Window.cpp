@@ -4,14 +4,13 @@
 
 #include <hello_imgui/hello_imgui.h>
 
-Window::Window(HelloImGui::RunnerParams& params)
-      : m_audioStreamer(std::make_unique<MP3Streamer>()), m_playlist(std::make_unique<Playlist>()), m_dialog(m_showFileDialog, m_selectedFile)
+Window::Window(HelloImGui::RunnerParams& params) : m_dialog(m_showFileDialog, m_selectedFile)
 {
 	params.callbacks.SetupImGuiStyle = [this]() { GuiSetup(); };
 
-	m_tonalityControl.setBass(0.0f);   // Neutral bass (-1 to 1)
-	m_tonalityControl.setTreble(0.0f); // Neutral treble (-1 to 1)
-	m_audioStreamer->setEffectProcessor(m_tonalityControl.createProcessor());
+	m_tonalityControl.SetBass(0.0f);   // Neutral bass (-1 to 1)
+	m_tonalityControl.SetTreble(0.0f); // Neutral treble (-1 to 1)
+	m_audioStreamer.SetEffectProcessor(m_tonalityControl.CreateProcessor());
 }
 
 void Window::Update()
@@ -33,9 +32,9 @@ void Window::Render()
 		m_dialog.Render();
 		if (!m_selectedFile.empty())
 		{
-			m_audioStreamer->openFromFile(m_selectedFile);
-			m_audioStreamer->play();
-			m_playlist->addTrack(m_selectedFile);
+			m_audioStreamer.OpenFromFile(m_selectedFile);
+			m_audioStreamer.Play();
+			m_playlist.AddTrack(m_selectedFile);
 			m_selectedFile.clear();
 		}
 	}
@@ -152,7 +151,7 @@ void Window::RenderPlaylistPanel()
 	ImGui::Text("Playlist");
 	ImGui::Separator();
 
-	const auto& tracks = m_playlist->getTracks();
+	const auto& tracks = m_playlist.GetTracks();
 	for (size_t i = 0; i < tracks.size(); i++)
 	{
 		std::string filename = std::filesystem::path(tracks[i]).filename().string();
@@ -160,10 +159,10 @@ void Window::RenderPlaylistPanel()
 		filename = filename.substr(0, filename.find_last_of('.'));
 
 		// Selectable track
-		if (ImGui::Selectable(filename.c_str(), m_playlist->getCurrentIndex() == i))
+		if (ImGui::Selectable(filename.c_str(), m_playlist.GetCurrentIndex() == i))
 		{
-			m_audioStreamer->openFromFile(tracks[i]);
-			m_audioStreamer->play();
+			m_audioStreamer.OpenFromFile(tracks[i]);
+			m_audioStreamer.Play();
 		}
 	}
 	ImGui::EndChild();
@@ -185,15 +184,15 @@ void Window::RenderPlaylistPanel()
 	ImGui::SameLine();
 	if (ImGui::Button((ICON_LC_MINUS "##RemoveFile"), ImVec2(buttonWidth, buttonHeight)))
 	{
-		size_t lastIndex = m_playlist->size() - 1;
+		size_t lastIndex = m_playlist.Size() - 1;
 		
 		// If the current track was removed, stop playback
-		if (m_playlist->getCurrentIndex() == lastIndex)
+		if (m_playlist.GetCurrentIndex() == lastIndex)
 		{
-			m_audioStreamer->stop();
+			m_audioStreamer.Stop();
 		}
 		
-		m_playlist->removeTrack(lastIndex);
+		m_playlist.RemoveTrack(lastIndex);
 	}
 
 	ImGui::EndChild();
@@ -207,7 +206,7 @@ void Window::RenderControlsPanel()
 	ImGui::BeginChild("Controls", ImVec2(0, totalHeight), true);
 
 	// If we have a track
-	if (m_audioStreamer->getStatus() != AudioStreamer::Status::Stopped)
+	if (m_audioStreamer.GetStatus() != AudioStreamer::Status::Stopped)
 	{
 		RenderTrackInfo();
 		RenderPlaybackControls();
@@ -225,7 +224,7 @@ void Window::RenderControlsPanel()
 
 void Window::RenderTrackInfo()
 {
-	const AudioStreamer::TrackInfo& trackInfo = m_audioStreamer->GetTrackInfo();
+	const AudioStreamer::TrackInfo& trackInfo = m_audioStreamer.GetTrackInfo();
 	ImGuiStyle& style = ImGui::GetStyle();
 
 	// Now Playing header with accent color
@@ -261,8 +260,8 @@ void Window::RenderProgressBar()
 	static bool isDragging = false;
 	static float dragProgress = 0.0f;
 
-	double currentTime = m_audioStreamer->getPlayingOffset();
-	float duration = m_audioStreamer->getDuration();
+	double currentTime = m_audioStreamer.GetPlayingOffset();
+	float duration = m_audioStreamer.GetDuration();
 
 	// Calculate current progress and round to 1 decimal place to reduce jitter
 	float progress = (duration > 0.0) ? static_cast<float>((currentTime / duration) * 100.0f) : 0.0f;
@@ -301,7 +300,7 @@ void Window::RenderProgressBar()
 		// User finished dragging - update position
 		isDragging = false;
 		float seekTime = (dragProgress / 100.0f) * duration;
-		m_audioStreamer->setPlayingOffset(seekTime);
+		m_audioStreamer.SetPlayingOffset(seekTime);
 		lastProgress = dragProgress;
 	}
 
@@ -311,8 +310,8 @@ void Window::RenderProgressBar()
 void Window::RenderTimeDisplay()
 {
 	// Get current playback time and total duration
-	double currentTime = m_audioStreamer->getPlayingOffset();
-	double duration = m_audioStreamer->getDuration();
+	double currentTime = m_audioStreamer.GetPlayingOffset();
+	double duration = m_audioStreamer.GetDuration();
 
 	// Format both times
 	std::string currentTimeStr = FormatTime(currentTime);
@@ -331,41 +330,43 @@ void Window::RenderPlaybackControls()
 
 	if (ImGui::Button(("  " ICON_LC_SKIP_BACK "  "), ImVec2(controlWidth, buttonHeight)))
 	{
-		//m_audioStreamer->playPrevious();
-		LOG_WARN("Play Previous not implemented");
+		m_playlist.Previous();
+		m_audioStreamer.OpenFromFile(m_playlist.GetCurrentTrack());
 	}
 	ImGui::SameLine();
-	if (ImGui::Button(m_audioStreamer->getStatus() == AudioStreamer::Status::Playing ? ("  " ICON_LC_PAUSE "  ") : ("  " ICON_LC_PLAY "  "), ImVec2(controlWidth, buttonHeight)))
+	if (ImGui::Button(m_audioStreamer.GetStatus() == AudioStreamer::Status::Playing ? ("  " ICON_LC_PAUSE "  ") : ("  " ICON_LC_PLAY "  "), ImVec2(controlWidth, buttonHeight)))
 	{
-		if (m_audioStreamer->getStatus() == AudioStreamer::Status::Playing)
-			m_audioStreamer->pause();
+		if (m_audioStreamer.GetStatus() == AudioStreamer::Status::Playing)
+			m_audioStreamer.Pause();
 		else
-			m_audioStreamer->play();
+			m_audioStreamer.Play();
 	}
 	ImGui::SameLine();
 	if (ImGui::Button(("  " ICON_LC_SQUARE "  "), ImVec2(controlWidth, buttonHeight)))
 	{
-		m_audioStreamer->stop(true);
+		m_audioStreamer.Stop(true);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button(("  " ICON_LC_SKIP_FORWARD "  "), ImVec2(controlWidth, buttonHeight)))
 	{
-		//m_audioStreamer->playNext();
-		LOG_WARN("Play Next not implemented");
+		m_playlist.Next();
+		m_audioStreamer.OpenFromFile(m_playlist.GetCurrentTrack());
 	}
 	ImGui::SameLine();
+	// Change the color of the shuffle button if active
+	ImGui::PushStyleColor(ImGuiCol_Button, m_playlist.IsShuffleEnabled() ? ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered] : ImGui::GetStyle().Colors[ImGuiCol_Button]);
 	if (ImGui::Button(("  " ICON_LC_SHUFFLE "  "), ImVec2(controlWidth, buttonHeight)))
 	{
-		//m_audioStreamer->toggleShuffle();
-		LOG_WARN("Shuffle not implemented");
+		m_playlist.ToggleShuffle();
 	}
+	ImGui::PopStyleColor();
 
 	ImGui::PopStyleVar();
 }
 
 void Window::RenderVolumeControl()
 {
-	float volume = m_audioStreamer->getVolume() * 100.0f;
+	float volume = m_audioStreamer.GetVolume() * 100.0f;
 
 	// Start a group to ensure consistent alignment
 	ImGui::BeginGroup();
@@ -379,7 +380,7 @@ void Window::RenderVolumeControl()
 	ImGui::SetNextItemWidth(-1); // Take remaining width
 	if (ImGui::SliderFloat("##Volume", &volume, 0.0f, 100.0f, "%.0f%%"))
 	{
-		m_audioStreamer->setVolume(volume / 100.0f);
+		m_audioStreamer.setVolume(volume / 100.0f);
 	}
 
 	ImGui::EndGroup();
@@ -415,7 +416,7 @@ void Window::RenderAudioFilters()
 	ImGui::AlignTextToFramePadding();
 	ImGui::Text(ICON_LC_AUDIO_WAVEFORM "  Bass");
 	ImGui::SameLine(maxLabelWidth);
-	float bass = m_tonalityControl.getBass();
+	float bass = m_tonalityControl.GetBass();
 	// scale the value to 0 to 100
 	bass = (bass + 1.0f) * 50.0f;
 
@@ -425,7 +426,7 @@ void Window::RenderAudioFilters()
 		// scale it to -1 to 1
 		bass = (bass - 50.0f) / 50.0f;
 
-		m_tonalityControl.setBass(bass);
+		m_tonalityControl.SetBass(bass);
 	}
 
 	ImGui::Spacing();
@@ -433,7 +434,7 @@ void Window::RenderAudioFilters()
 	ImGui::AlignTextToFramePadding();
 	ImGui::Text(ICON_LC_ACTIVITY "  Treble");
 	ImGui::SameLine(maxLabelWidth);
-	float treble = m_tonalityControl.getTreble();
+	float treble = m_tonalityControl.GetTreble();
 	// scale the value to 0 to 100
 	treble = (treble + 1.0f) * 50.0f;
 
@@ -443,128 +444,86 @@ void Window::RenderAudioFilters()
 		// scale it to -1 to 1
 		treble = (treble - 50.0f) / 50.0f;
 
-		m_tonalityControl.setTreble(treble);
+		m_tonalityControl.SetTreble(treble);
 	}
-
-	//// Pitch Control
-	//ImGui::Spacing();
-	//ImGui::AlignTextToFramePadding();
-	//ImGui::Text(ICON_LC_FAST_FORWARD "  Pitch");
-	//ImGui::SameLine(maxLabelWidth);
-	//float pitch = m_audioStreamer->getPitch();
-	//ImGui::SetNextItemWidth(-1);
-	//if (ImGui::SliderFloat("##Pitch", &pitch, 0.0f, 100.0f, "%.0f%%"))
-	//{
-	//	m_audioStreamer->setPitch(pitch);
-	//}
-	//// Preset Buttons
-	//ImGui::Spacing();
-	//ImGui::Separator();
-	//ImGui::Spacing();
-
-	//ImGui::Text("Fun Presets");
-	//ImGui::Spacing();
-
-	//float buttonWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2) / 3;
-
-	//if (ImGui::Button("Chipmunk Mode", ImVec2(buttonWidth, 35)))
-	//{
-	//	m_audioStreamer->setPitch(50.0f);
-	//	m_audioStreamer->setTreble(100.0f);
-	//	m_audioStreamer->setBass(0.0f);
-	//}
-	//ImGui::SameLine();
-	//if (ImGui::Button("Slowed", ImVec2(buttonWidth, 35)))
-	//{
-	//	m_audioStreamer->setPitch(25.0f);
-	//	m_audioStreamer->setBass(35.0f);
-	//	m_audioStreamer->setTreble(0.0f);
-	//}
-	//ImGui::SameLine();
-	//if (ImGui::Button("Reset", ImVec2(buttonWidth, 35)))
-	//{
-	//	m_audioStreamer->setPitch(50.0f);
-	//	m_audioStreamer->setTreble(0.0f);
-	//	m_audioStreamer->setBass(100.0f);
-	//}
 
 	ImGui::EndGroup();
 }
 
-//void Window::RenderVisualizer()
-//{
-//	float VISUALIZER_HEIGHT = 100.0f;
-//	const float MIN_BAR_HEIGHT = 2.0f;
-//	const float BAR_SPACING = 2.0f; // Increased spacing
-//
-//	ImGui::BeginChild("Visualizer", ImVec2(0, VISUALIZER_HEIGHT), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-//
-//	const std::vector<float>& vizData = m_audioStreamer->getVisualizerData();
-//	const std::vector<float>& peakData = m_audioStreamer->getBandPeaks();
-//
-//	if (vizData.empty())
-//	{
-//		ImGui::EndChild();
-//		return;
-//	}
-//
-//	VISUALIZER_HEIGHT -= ImGui::GetStyle().WindowPadding.y * 2;
-//
-//	// Calculate dimensions
-//	ImVec2 contentRegion = ImGui::GetContentRegionAvail();
-//	float availWidth = contentRegion.x;
-//	float barWidth = (availWidth - (BAR_SPACING * (vizData.size() - 1))) / vizData.size();
-//	float centerY = VISUALIZER_HEIGHT / 2.0f;
-//
-//	// Get colors from ImGui style
-//	const ImGuiStyle& style = ImGui::GetStyle();
-//	ImVec4 barColor = style.Colors[ImGuiCol_ButtonActive];
-//	ImVec4 peakColor = ImVec4(barColor.x * 1.2f, barColor.y * 1.2f, barColor.z * 1.2f, 1.0f);
-//
-//	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(BAR_SPACING, 0));
-//
-//	for (size_t i = 0; i < vizData.size(); i++)
-//	{
-//		// Apply non-linear scaling for better visual dynamics
-//		float value = std::pow(vizData[i], 0.7f); // Adjust power for different curve
-//		float peak = std::pow(peakData[i], 0.7f);
-//
-//		float rawHeight = value * (VISUALIZER_HEIGHT * 0.95f);
-//		float height = max(rawHeight, MIN_BAR_HEIGHT);
-//		float halfHeight = height / 2.0f;
-//
-//		ImGui::PushID(static_cast<int>(i));
-//
-//		ImVec2 cursorPos = ImGui::GetCursorScreenPos();
-//		ImDrawList* drawList = ImGui::GetWindowDrawList();
-//
-//		// Calculate vertical positions
-//		float topY = cursorPos.y + centerY - halfHeight;
-//		float bottomY = cursorPos.y + centerY + halfHeight;
-//
-//		// Draw gradient bar
-//		ImVec4 gradientTop = ImVec4(barColor.x * 1.2f, barColor.y * 1.2f, barColor.z * 1.2f, barColor.w);
-//		ImVec4 gradientBottom = barColor;
-//
-//		drawList->AddRectFilledMultiColor(ImVec2(cursorPos.x, topY), ImVec2(cursorPos.x + barWidth, bottomY), ImGui::GetColorU32(gradientTop), ImGui::GetColorU32(gradientTop), ImGui::GetColorU32(gradientBottom), ImGui::GetColorU32(gradientBottom));
-//
-//		// Draw peak indicator
-//		float peakHeight = peak * (VISUALIZER_HEIGHT * 0.95f);
-//		float peakY = cursorPos.y + centerY - (peakHeight / 2.0f);
-//		drawList->AddRectFilled(ImVec2(cursorPos.x, peakY), ImVec2(cursorPos.x + barWidth, peakY + 1.0f), ImGui::GetColorU32(peakColor));
-//
-//		ImGui::Dummy(ImVec2(barWidth, VISUALIZER_HEIGHT));
-//		if (i < vizData.size() - 1)
-//		{
-//			ImGui::SameLine();
-//		}
-//
-//		ImGui::PopID();
-//	}
-//
-//	ImGui::PopStyleVar();
-//	ImGui::EndChild();
-//}
+void Window::RenderVisualizer()
+{
+	//float VISUALIZER_HEIGHT = 100.0f;
+	//const float MIN_BAR_HEIGHT = 2.0f;
+	//const float BAR_SPACING = 2.0f; // Increased spacing
+
+	//ImGui::BeginChild("Visualizer", ImVec2(0, VISUALIZER_HEIGHT), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+	//const std::vector<float>& vizData = m_audioStreamer->getVisualizerData();
+	//const std::vector<float>& peakData = m_audioStreamer->getBandPeaks();
+
+	//if (vizData.empty())
+	//{
+	//	ImGui::EndChild();
+	//	return;
+	//}
+
+	//VISUALIZER_HEIGHT -= ImGui::GetStyle().WindowPadding.y * 2;
+
+	//// Calculate dimensions
+	//ImVec2 contentRegion = ImGui::GetContentRegionAvail();
+	//float availWidth = contentRegion.x;
+	//float barWidth = (availWidth - (BAR_SPACING * (vizData.size() - 1))) / vizData.size();
+	//float centerY = VISUALIZER_HEIGHT / 2.0f;
+
+	//// Get colors from ImGui style
+	//const ImGuiStyle& style = ImGui::GetStyle();
+	//ImVec4 barColor = style.Colors[ImGuiCol_ButtonActive];
+	//ImVec4 peakColor = ImVec4(barColor.x * 1.2f, barColor.y * 1.2f, barColor.z * 1.2f, 1.0f);
+
+	//ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(BAR_SPACING, 0));
+
+	//for (size_t i = 0; i < vizData.size(); i++)
+	//{
+	//	// Apply non-linear scaling for better visual dynamics
+	//	float value = std::pow(vizData[i], 0.7f); // Adjust power for different curve
+	//	float peak = std::pow(peakData[i], 0.7f);
+
+	//	float rawHeight = value * (VISUALIZER_HEIGHT * 0.95f);
+	//	float height = max(rawHeight, MIN_BAR_HEIGHT);
+	//	float halfHeight = height / 2.0f;
+
+	//	ImGui::PushID(static_cast<int>(i));
+
+	//	ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+	//	ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+	//	// Calculate vertical positions
+	//	float topY = cursorPos.y + centerY - halfHeight;
+	//	float bottomY = cursorPos.y + centerY + halfHeight;
+
+	//	// Draw gradient bar
+	//	ImVec4 gradientTop = ImVec4(barColor.x * 1.2f, barColor.y * 1.2f, barColor.z * 1.2f, barColor.w);
+	//	ImVec4 gradientBottom = barColor;
+
+	//	drawList->AddRectFilledMultiColor(ImVec2(cursorPos.x, topY), ImVec2(cursorPos.x + barWidth, bottomY), ImGui::GetColorU32(gradientTop), ImGui::GetColorU32(gradientTop), ImGui::GetColorU32(gradientBottom), ImGui::GetColorU32(gradientBottom));
+
+	//	// Draw peak indicator
+	//	float peakHeight = peak * (VISUALIZER_HEIGHT * 0.95f);
+	//	float peakY = cursorPos.y + centerY - (peakHeight / 2.0f);
+	//	drawList->AddRectFilled(ImVec2(cursorPos.x, peakY), ImVec2(cursorPos.x + barWidth, peakY + 1.0f), ImGui::GetColorU32(peakColor));
+
+	//	ImGui::Dummy(ImVec2(barWidth, VISUALIZER_HEIGHT));
+	//	if (i < vizData.size() - 1)
+	//	{
+	//		ImGui::SameLine();
+	//	}
+
+	//	ImGui::PopID();
+	//}
+
+	//ImGui::PopStyleVar();
+	//ImGui::EndChild();
+}
 //
 //void Window::RenderSpatialControl()
 //{
