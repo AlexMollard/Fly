@@ -10,7 +10,8 @@ A modern audio player built with C++ featuring real-time audio visualization, sp
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey.svg">
 </div>
 
-![Fly Player](res/screenshot.png)
+![Fly Player Empty](res/empty.png)
+![Fly Player Full](res/full.png)
 
 ## Features
 

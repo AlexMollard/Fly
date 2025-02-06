@@ -3,6 +3,7 @@
 #include "Window.h"
 
 #include <hello_imgui/hello_imgui.h>
+#include <imgui_internal.h>
 
 Window::Window(HelloImGui::RunnerParams& params)
       : m_dialog(m_showFileDialog, m_selectedFile), m_roomReverb(m_audioStreamer.GetRoomReverb())
@@ -133,7 +134,37 @@ void Window::RenderControlsPanel(float height)
 	}
 	else
 	{
-		ImGui::Text("ADD MORE INFO HERE: No track loaded");
+		// Center the text vertically in the panel
+		float textHeight = ImGui::GetTextLineHeightWithSpacing() * 4; // Height for 4 lines of text
+		float startY = (height - textHeight) * 0.5f;
+		ImGui::SetCursorPosY(startY);
+
+		// Center align the text
+		float windowWidth = ImGui::GetContentRegionAvail().x;
+
+		// Welcome text
+		const char* welcomeText = ICON_LC_MUSIC "  Welcome to the Audio Player";
+		float textWidth = ImGui::CalcTextSize(welcomeText).x;
+		ImGui::SetCursorPosX((windowWidth - textWidth) * 0.5f);
+		ImGui::TextColored(ImGui::GetStyle().Colors[ImGuiCol_ButtonActive], "%s", welcomeText);
+
+		ImGui::Spacing();
+		ImGui::Spacing();
+
+		// Instructions text
+		const char* instructionsText = "To begin, click the '+' button in the playlist panel.";
+		textWidth = ImGui::CalcTextSize(instructionsText).x;
+		ImGui::SetCursorPosX((windowWidth - textWidth) * 0.5f);
+		ImGui::Text("%s", instructionsText);
+
+		ImGui::Spacing();
+		ImGui::Spacing();
+
+		// Supported formats text
+		const char* formatsText = "Supported formats: MP3 (To come: WAV, OGG, FLAC)";
+		textWidth = ImGui::CalcTextSize(formatsText).x;
+		ImGui::SetCursorPosX((windowWidth - textWidth) * 0.5f);
+		ImGui::TextColored(ImGui::GetStyle().Colors[ImGuiCol_TextDisabled], "%s", formatsText);
 	}
 
 	ImGui::EndChild();
