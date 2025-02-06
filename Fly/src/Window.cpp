@@ -15,7 +15,7 @@ Window::Window(HelloImGui::RunnerParams& params) : m_dialog(m_showFileDialog, m_
 
 void Window::Update()
 {
-
+	m_audioStreamer.Update();
 }
 
 void Window::Render()
@@ -209,6 +209,7 @@ void Window::RenderControlsPanel()
 	if (m_audioStreamer.GetStatus() != AudioStreamer::Status::Stopped)
 	{
 		RenderTrackInfo();
+		RenderVisualizer();
 		RenderPlaybackControls();
 		RenderVolumeControl();
 		RenderAudioFilters();
@@ -452,79 +453,79 @@ void Window::RenderAudioFilters()
 
 void Window::RenderVisualizer()
 {
-	//float VISUALIZER_HEIGHT = 100.0f;
-	//const float MIN_BAR_HEIGHT = 2.0f;
-	//const float BAR_SPACING = 2.0f; // Increased spacing
+	float VISUALIZER_HEIGHT = 100.0f;
+	const float MIN_BAR_HEIGHT = 2.0f;
+	const float BAR_SPACING = 2.0f; // Increased spacing
 
-	//ImGui::BeginChild("Visualizer", ImVec2(0, VISUALIZER_HEIGHT), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	ImGui::BeginChild("Visualizer", ImVec2(0, VISUALIZER_HEIGHT), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-	//const std::vector<float>& vizData = m_audioStreamer->getVisualizerData();
-	//const std::vector<float>& peakData = m_audioStreamer->getBandPeaks();
+	const std::vector<float>& vizData = m_audioStreamer.GetVisualizerData();
+	const std::vector<float>& peakData = m_audioStreamer.GetBandPeaks();
 
-	//if (vizData.empty())
-	//{
-	//	ImGui::EndChild();
-	//	return;
-	//}
+	if (vizData.empty())
+	{
+		ImGui::EndChild();
+		return;
+	}
 
-	//VISUALIZER_HEIGHT -= ImGui::GetStyle().WindowPadding.y * 2;
+	VISUALIZER_HEIGHT -= ImGui::GetStyle().WindowPadding.y * 2;
 
-	//// Calculate dimensions
-	//ImVec2 contentRegion = ImGui::GetContentRegionAvail();
-	//float availWidth = contentRegion.x;
-	//float barWidth = (availWidth - (BAR_SPACING * (vizData.size() - 1))) / vizData.size();
-	//float centerY = VISUALIZER_HEIGHT / 2.0f;
+	// Calculate dimensions
+	ImVec2 contentRegion = ImGui::GetContentRegionAvail();
+	float availWidth = contentRegion.x;
+	float barWidth = (availWidth - (BAR_SPACING * (vizData.size() - 1))) / vizData.size();
+	float centerY = VISUALIZER_HEIGHT / 2.0f;
 
-	//// Get colors from ImGui style
-	//const ImGuiStyle& style = ImGui::GetStyle();
-	//ImVec4 barColor = style.Colors[ImGuiCol_ButtonActive];
-	//ImVec4 peakColor = ImVec4(barColor.x * 1.2f, barColor.y * 1.2f, barColor.z * 1.2f, 1.0f);
+	// Get colors from ImGui style
+	const ImGuiStyle& style = ImGui::GetStyle();
+	ImVec4 barColor = style.Colors[ImGuiCol_ButtonActive];
+	ImVec4 peakColor = ImVec4(barColor.x * 1.2f, barColor.y * 1.2f, barColor.z * 1.2f, 1.0f);
 
-	//ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(BAR_SPACING, 0));
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(BAR_SPACING, 0));
 
-	//for (size_t i = 0; i < vizData.size(); i++)
-	//{
-	//	// Apply non-linear scaling for better visual dynamics
-	//	float value = std::pow(vizData[i], 0.7f); // Adjust power for different curve
-	//	float peak = std::pow(peakData[i], 0.7f);
+	for (size_t i = 0; i < vizData.size(); i++)
+	{
+		// Apply non-linear scaling for better visual dynamics
+		float value = std::pow(vizData[i], 0.7f); // Adjust power for different curve
+		float peak = std::pow(peakData[i], 0.7f);
 
-	//	float rawHeight = value * (VISUALIZER_HEIGHT * 0.95f);
-	//	float height = max(rawHeight, MIN_BAR_HEIGHT);
-	//	float halfHeight = height / 2.0f;
+		float rawHeight = value * (VISUALIZER_HEIGHT * 0.95f);
+		float height = max(rawHeight, MIN_BAR_HEIGHT);
+		float halfHeight = height / 2.0f;
 
-	//	ImGui::PushID(static_cast<int>(i));
+		ImGui::PushID(static_cast<int>(i));
 
-	//	ImVec2 cursorPos = ImGui::GetCursorScreenPos();
-	//	ImDrawList* drawList = ImGui::GetWindowDrawList();
+		ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-	//	// Calculate vertical positions
-	//	float topY = cursorPos.y + centerY - halfHeight;
-	//	float bottomY = cursorPos.y + centerY + halfHeight;
+		// Calculate vertical positions
+		float topY = cursorPos.y + centerY - halfHeight;
+		float bottomY = cursorPos.y + centerY + halfHeight;
 
-	//	// Draw gradient bar
-	//	ImVec4 gradientTop = ImVec4(barColor.x * 1.2f, barColor.y * 1.2f, barColor.z * 1.2f, barColor.w);
-	//	ImVec4 gradientBottom = barColor;
+		// Draw gradient bar
+		ImVec4 gradientTop = ImVec4(barColor.x * 1.2f, barColor.y * 1.2f, barColor.z * 1.2f, barColor.w);
+		ImVec4 gradientBottom = barColor;
 
-	//	drawList->AddRectFilledMultiColor(ImVec2(cursorPos.x, topY), ImVec2(cursorPos.x + barWidth, bottomY), ImGui::GetColorU32(gradientTop), ImGui::GetColorU32(gradientTop), ImGui::GetColorU32(gradientBottom), ImGui::GetColorU32(gradientBottom));
+		drawList->AddRectFilledMultiColor(ImVec2(cursorPos.x, topY), ImVec2(cursorPos.x + barWidth, bottomY), ImGui::GetColorU32(gradientTop), ImGui::GetColorU32(gradientTop), ImGui::GetColorU32(gradientBottom), ImGui::GetColorU32(gradientBottom));
 
-	//	// Draw peak indicator
-	//	float peakHeight = peak * (VISUALIZER_HEIGHT * 0.95f);
-	//	float peakY = cursorPos.y + centerY - (peakHeight / 2.0f);
-	//	drawList->AddRectFilled(ImVec2(cursorPos.x, peakY), ImVec2(cursorPos.x + barWidth, peakY + 1.0f), ImGui::GetColorU32(peakColor));
+		// Draw peak indicator
+		float peakHeight = peak * (VISUALIZER_HEIGHT * 0.95f);
+		float peakY = cursorPos.y + centerY - (peakHeight / 2.0f);
+		drawList->AddRectFilled(ImVec2(cursorPos.x, peakY), ImVec2(cursorPos.x + barWidth, peakY + 1.0f), ImGui::GetColorU32(peakColor));
 
-	//	ImGui::Dummy(ImVec2(barWidth, VISUALIZER_HEIGHT));
-	//	if (i < vizData.size() - 1)
-	//	{
-	//		ImGui::SameLine();
-	//	}
+		ImGui::Dummy(ImVec2(barWidth, VISUALIZER_HEIGHT));
+		if (i < vizData.size() - 1)
+		{
+			ImGui::SameLine();
+		}
 
-	//	ImGui::PopID();
-	//}
+		ImGui::PopID();
+	}
 
-	//ImGui::PopStyleVar();
-	//ImGui::EndChild();
+	ImGui::PopStyleVar();
+	ImGui::EndChild();
 }
-//
+
 //void Window::RenderSpatialControl()
 //{
 //	ImGui::Spacing();

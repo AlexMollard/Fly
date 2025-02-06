@@ -70,7 +70,6 @@ bool MP3Streamer::OpenFromFile(const std::string& filename)
 	m_trackInfo.genre = sf_get_string(m_file, SF_STR_GENRE) ? sf_get_string(m_file, SF_STR_GENRE) : "";
 	m_trackInfo.year = sf_get_string(m_file, SF_STR_DATE) ? sf_get_string(m_file, SF_STR_DATE) : "";
 
-	// How do I get the duration?
 	m_trackInfo.duration = static_cast<float>(m_fileInfo.frames) / m_fileInfo.samplerate;
 
 	return true;
@@ -97,6 +96,21 @@ const AudioStreamer::TrackInfo& MP3Streamer::GetTrackInfo()
 	return m_trackInfo;
 }
 
+const std::vector<float>& MP3Streamer::GetVisualizerData() const
+{
+	return m_visualizer.GetVisualizerData();
+}
+
+const std::vector<float>& MP3Streamer::GetBandPeaks() const
+{
+	return m_visualizer.GetBandPeaks();
+}
+
+void MP3Streamer::Update()
+{
+	m_visualizer.Update();
+}
+
 bool MP3Streamer::OnGetData(AudioChunk& chunk)
 {
 	if (!m_file)
@@ -110,6 +124,8 @@ bool MP3Streamer::OnGetData(AudioChunk& chunk)
 	{
 		chunk.samples = m_sampleBuffer.data();
 		chunk.sampleCount = static_cast<std::size_t>(framesRead * m_fileInfo.channels);
+		m_visualizer.PushAudioData(m_sampleBuffer, m_fileInfo.channels, m_fileInfo.samplerate);
+		
 		return true;
 	}
 

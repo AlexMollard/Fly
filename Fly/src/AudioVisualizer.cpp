@@ -3,14 +3,14 @@
 #include "AudioVisualizer.h"
 
 AudioVisualizer::AudioVisualizer()
-      : ringBuffer(RING_BUFFER_SIZE), visualizerData(NUM_BANDS), bandPeaks(NUM_BANDS), bandDecay(NUM_BANDS), prevMagnitudes(NUM_BANDS), lastUpdateTime(std::chrono::steady_clock::now())
+      : m_ringBuffer(RING_BUFFER_SIZE), m_visualizerData(NUM_BANDS), m_bandPeaks(NUM_BANDS), m_bandDecay(NUM_BANDS), m_prevMagnitudes(NUM_BANDS), m_lastUpdateTime(std::chrono::steady_clock::now())
 {
 }
 
-void AudioVisualizer::pushAudioData(const std::vector<float>& buffer, int channels, int sampleRate)
+void AudioVisualizer::PushAudioData(const std::vector<float>& buffer, int channels, int sampleRate)
 {
-	std::lock_guard<std::mutex> lock(bufferMutex);
-	currentSampleRate = sampleRate;
+	std::lock_guard<std::mutex> lock(m_bufferMutex);
+	m_currentSampleRate = sampleRate;
 
 	// Convert to mono and add to ring buffer
 	for (size_t i = 0; i < buffer.size(); i += channels)
@@ -25,22 +25,22 @@ void AudioVisualizer::pushAudioData(const std::vector<float>& buffer, int channe
 
 		sample = std::tanh(sample * 1.5f); // Soft limiting with slight amplification
 
-		ringBuffer[writePos] = sample;
-		writePos = (writePos + 1) & (RING_BUFFER_SIZE - 1); // Wrap around
+		m_ringBuffer[m_writePos] = sample;
+		m_writePos = (m_writePos + 1) & (RING_BUFFER_SIZE - 1); // Wrap around
 
 		// If buffer is full, move read position
-		if (writePos == readPos)
+		if (m_writePos == m_readPos)
 		{
-			readPos = (readPos + 1) & (RING_BUFFER_SIZE - 1);
+			m_readPos = (m_readPos + 1) & (RING_BUFFER_SIZE - 1);
 		}
 	}
 }
 
 // Called from main/rendering thread
-bool AudioVisualizer::update()
+bool AudioVisualizer::Update()
 {
 	auto now = std::chrono::steady_clock::now();
-	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdateTime).count();
+	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastUpdateTime).count();
 
 	// Only update at specified interval
 	if (elapsed < UPDATE_INTERVAL_MS)
@@ -48,21 +48,21 @@ bool AudioVisualizer::update()
 		return false;
 	}
 
-	lastUpdateTime = now;
+	m_lastUpdateTime = now;
 
 	std::vector<float> processBuffer;
 	{
-		std::lock_guard<std::mutex> lock(bufferMutex);
+		std::lock_guard<std::mutex> lock(m_bufferMutex);
 
 		// Calculate available samples
 		size_t available;
-		if (writePos >= readPos)
+		if (m_writePos >= m_readPos)
 		{
-			available = writePos - readPos;
+			available = m_writePos - m_readPos;
 		}
 		else
 		{
-			available = RING_BUFFER_SIZE - (readPos - writePos);
+			available = RING_BUFFER_SIZE - (m_readPos - m_writePos);
 		}
 
 		// Need enough samples for FFT
@@ -75,19 +75,19 @@ bool AudioVisualizer::update()
 		processBuffer.reserve(FFT_SIZE);
 		for (size_t i = 0; i < FFT_SIZE; i++)
 		{
-			processBuffer.push_back(ringBuffer[(readPos + i) & (RING_BUFFER_SIZE - 1)]);
+			processBuffer.push_back(m_ringBuffer[(m_readPos + i) & (RING_BUFFER_SIZE - 1)]);
 		}
 
 		// Update read position
-		readPos = (readPos + FFT_SIZE / 2) & (RING_BUFFER_SIZE - 1); // Overlap by 50%
+		m_readPos = (m_readPos + FFT_SIZE / 2) & (RING_BUFFER_SIZE - 1); // Overlap by 50%
 	}
 
 	// Process the audio data
-	processFFT(processBuffer);
+	ProcessFFT(processBuffer);
 	return true;
 }
 
-void AudioVisualizer::processFFT(const std::vector<float>& samples)
+void AudioVisualizer::ProcessFFT(const std::vector<float>& samples)
 {
 	static const float RISE_SPEED = 0.7f;
 	static const float FALL_SPEED = 0.15f;
@@ -105,10 +105,10 @@ void AudioVisualizer::processFFT(const std::vector<float>& samples)
 
 	// Perform FFT and get magnitudes
 	std::vector<float> rawMagnitudes;
-	performFFT(normalizedSamples, rawMagnitudes);
+	PerformFFT(normalizedSamples, rawMagnitudes);
 
 	std::vector<float> newMagnitudes(NUM_BANDS, 0.0f);
-	float sampleRate = currentSampleRate > 0 ? currentSampleRate : 44100.0f;
+	float sampleRate = m_currentSampleRate > 0 ? m_currentSampleRate : 44100.0f;
 
 	float minFreq = 20.0f;
 	float maxFreq = 20000.0f;
@@ -152,45 +152,45 @@ void AudioVisualizer::processFFT(const std::vector<float>& samples)
 		normalizedMag *= 0.8f;
 
 		// Temporal smoothing
-		float delta = normalizedMag - prevMagnitudes[band];
+		float delta = normalizedMag - m_prevMagnitudes[band];
 		if (delta > 0)
 		{
-			newMagnitudes[band] = prevMagnitudes[band] + delta * RISE_SPEED;
+			newMagnitudes[band] = m_prevMagnitudes[band] + delta * RISE_SPEED;
 		}
 		else
 		{
-			newMagnitudes[band] = prevMagnitudes[band] + delta * FALL_SPEED;
+			newMagnitudes[band] = m_prevMagnitudes[band] + delta * FALL_SPEED;
 		}
 
 		// Peak tracking
-		if (newMagnitudes[band] > bandPeaks[band])
+		if (newMagnitudes[band] > m_bandPeaks[band])
 		{
-			bandPeaks[band] = newMagnitudes[band];
+			m_bandPeaks[band] = newMagnitudes[band];
 		}
 		else
 		{
-			bandPeaks[band] *= (1.0f - PEAK_FALL_SPEED);
+			m_bandPeaks[band] *= (1.0f - PEAK_FALL_SPEED);
 		}
 
 		// Final safety clamp
 		newMagnitudes[band] = std::clamp(newMagnitudes[band], 0.0f, 0.85f);
 	}
 
-	prevMagnitudes = newMagnitudes;
-	visualizerData = newMagnitudes;
+	m_prevMagnitudes = newMagnitudes;
+	m_visualizerData = newMagnitudes;
 }
 
-const std::vector<float>& AudioVisualizer::getVisualizerData() const
+const std::vector<float>& AudioVisualizer::GetVisualizerData() const
 {
-	return visualizerData;
+	return m_visualizerData;
 }
 
-const std::vector<float>& AudioVisualizer::getBandPeaks() const
+const std::vector<float>& AudioVisualizer::GetBandPeaks() const
 {
-	return bandPeaks;
+	return m_bandPeaks;
 }
 
-void AudioVisualizer::performFFT(const std::vector<float>& samples, std::vector<float>& magnitudes)
+void AudioVisualizer::PerformFFT(const std::vector<float>& samples, std::vector<float>& magnitudes)
 {
 	// Apply Hann window and prepare FFT input
 	std::vector<std::complex<float>> fftInput(FFT_SIZE);

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "AudioStreamer.h"
+#include "AudioVisualizer.h"
 
 class MP3Streamer : public AudioStreamer
 {
@@ -27,6 +28,12 @@ public:
 	// Get Info
 	const AudioStreamer::TrackInfo& GetTrackInfo();
 
+	// Visualizer (Just calls into the member)
+	const std::vector<float>& GetVisualizerData() const;
+	const std::vector<float>& GetBandPeaks() const;
+
+	void Update();
+
 protected:
 	// AudioStreamer interface implementation
 	bool OnGetData(AudioChunk& chunk) override;
@@ -39,6 +46,7 @@ private:
 
 	SNDFILE* m_file{ nullptr };
 	SF_INFO m_fileInfo{};
+	AudioVisualizer m_visualizer;
 
 	std::vector<float> m_sampleBuffer;
 	static constexpr std::size_t BUFFER_SIZE = 16384; // Buffer size in samples (Might move into the cpp file)
