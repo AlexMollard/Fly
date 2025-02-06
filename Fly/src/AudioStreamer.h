@@ -120,6 +120,20 @@ public:
 		m_effectProcessor = nullptr;
 	}
 
+	// Spatial audio control
+	void SetPosition(float x, float z);
+	void SetListenerPosition(float x, float z);
+
+	std::pair<float, float> GetPosition() const
+	{
+		return { m_positionX, m_positionZ };
+	}
+
+	std::pair<float, float> GetListenerPosition() const
+	{
+		return { m_listenerX, m_listenerZ };
+	}
+
 protected:
 	// Virtual methods for derived classes
 	virtual bool OnGetData(AudioChunk& chunk) = 0;
@@ -131,6 +145,12 @@ protected:
 
 	// Track info
 	AudioStreamer::TrackInfo m_trackInfo{};
+
+	// Spatial audio state
+	float m_positionX{ 0.0f };
+	float m_positionZ{ 0.0f };
+	float m_listenerX{ 0.0f };
+	float m_listenerZ{ 0.0f };
 
 private:
 	void InitOpenAL();

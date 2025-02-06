@@ -15,7 +15,10 @@ Window::Window(HelloImGui::RunnerParams& params) : m_dialog(m_showFileDialog, m_
 
 void Window::Update()
 {
-	m_audioStreamer.Update();
+	if (m_viusalizerEnabled)
+	{
+		m_audioStreamer.Update();
+	}
 }
 
 void Window::Render()
@@ -24,12 +27,21 @@ void Window::Render()
 	ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 	ImGui::Begin("MP3 Player##MainWindow", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 
-	RenderPlaylistPanel();
+	// Calculate main layout dimensions
+	float windowWidth = ImGui::GetWindowWidth() - 3 * ImGui::GetStyle().WindowPadding.x;
+	float windowHeight = ImGui::GetWindowHeight() - ImGui::GetStyle().WindowPadding.y;
+	float bottomPanelHeight = 155.0f; // Height for progress bar and controls
+	float mainContentHeight = windowHeight - bottomPanelHeight - ImGui::GetStyle().ItemSpacing.y * 2;
+	float playlistWidth = windowWidth * 0.3f; // 30% of window width
+
+	// Main content area (Playlist + Controls)
+	RenderPlaylistPanel(playlistWidth, mainContentHeight + ImGui::GetStyle().ItemSpacing.y);
 	ImGui::SameLine();
 	ImGui::SetCursorPosY(ImGui::GetStyle().WindowPadding.y);
+
 	if (m_showFileDialog)
 	{
-		m_dialog.Render();
+		m_dialog.Render(mainContentHeight);
 		if (!m_selectedFile.empty())
 		{
 			m_audioStreamer.OpenFromFile(m_selectedFile);
@@ -40,10 +52,112 @@ void Window::Render()
 	}
 	else
 	{
-		RenderControlsPanel();
+		RenderControlsPanel(mainContentHeight);
 	}
 
+	// Bottom panel (Progress bar and playback controls)
+	ImGui::SetCursorPosY(mainContentHeight + ImGui::GetStyle().ItemSpacing.y * 2);
+	RenderBottomPanel(bottomPanelHeight);
+
 	ImGui::End();
+}
+
+void Window::RenderPlaylistPanel(float width, float height)
+{
+	// Calculate the heights
+	float controlsHeight = height * 0.125f;           // 12% of window height
+	float playlistHeight = height - controlsHeight; // Remaining 90%
+
+	// Main playlist panel
+	ImGui::BeginChild("Playlist", ImVec2(width, playlistHeight - ImGui::GetStyle().ItemSpacing.y * 2), true);
+
+	ImGui::Text("Playlist");
+	ImGui::Separator();
+
+	const auto& tracks = m_playlist.GetTracks();
+	for (size_t i = 0; i < tracks.size(); i++)
+	{
+		std::string filename = std::filesystem::path(tracks[i]).filename().string();
+		// Remove the file extension
+		filename = filename.substr(0, filename.find_last_of('.'));
+
+		// Selectable track
+		if (ImGui::Selectable(filename.c_str(), m_playlist.GetCurrentIndex() == i))
+		{
+			m_audioStreamer.OpenFromFile(tracks[i]);
+			m_audioStreamer.Play();
+		}
+	}
+	ImGui::EndChild();
+
+	// Playlist controls
+	ImGui::BeginChild("PlaylistControls", ImVec2(width, controlsHeight), true);
+
+	float buttonWidth = (width - ImGui::GetStyle().ItemSpacing.x * 4) * 0.5f;
+	float buttonHeight = controlsHeight - ImGui::GetStyle().ItemSpacing.y * 3;
+
+	if (ImGui::Button((ICON_LC_PLUS "##AddFile"), ImVec2(buttonWidth, buttonHeight)))
+	{
+		m_showFileDialog = true;
+	}
+
+	ImGui::SameLine();
+	if (ImGui::Button((ICON_LC_MINUS "##RemoveFile"), ImVec2(buttonWidth, buttonHeight)))
+	{
+		size_t lastIndex = m_playlist.Size() - 1;
+
+		if (m_playlist.GetCurrentIndex() == lastIndex)
+		{
+			m_audioStreamer.Stop();
+		}
+
+		m_playlist.RemoveTrack(lastIndex);
+	}
+
+	ImGui::EndChild();
+}
+
+void Window::RenderControlsPanel(float height)
+{
+	ImGui::BeginChild("Controls", ImVec2(0, height), true);
+
+	if (m_audioStreamer.GetStatus() != AudioStreamer::Status::Stopped)
+	{
+		RenderTrackInfo();
+		RenderVisualizer();
+		RenderAudioFilters();
+		RenderSpatialControl();
+	}
+	else
+	{
+		ImGui::Text("ADD MORE INFO HERE: No track loaded");
+	}
+
+	ImGui::EndChild();
+}
+
+void Window::RenderBottomPanel(float height)
+{
+	ImGui::BeginChild("BottomPanel", ImVec2(0, height), true);
+
+	// Ensure we have a track loaded
+	if (m_audioStreamer.GetStatus() != AudioStreamer::Status::Stopped)
+	{
+		// Progress section
+		ImGui::BeginGroup();
+		RenderProgressBar();
+		RenderTimeDisplay();
+		ImGui::EndGroup();
+
+		// Playback controls to the right and volume control to the left
+		ImGui::BeginGroup();
+		RenderPlaybackControls();
+		ImGui::EndGroup();
+
+		RenderVolumeControl();
+	}
+
+	ImGui::EndChild();
 }
 
 void Window::GuiSetup()
@@ -137,67 +251,6 @@ void Window::GuiSetup()
 	LOG_DEBUG("GUI Setup complete");
 }
 
-void Window::RenderPlaylistPanel()
-{
-	// Calculate the heights
-	float totalHeight = ImGui::GetWindowHeight() - ImGui::GetStyle().WindowPadding.y * 3;
-	float controlsHeight = totalHeight * 0.1f;           // 10% of window height
-	float playlistHeight = totalHeight - controlsHeight; // Remaining 90%
-	float panelWidth = ImGui::GetWindowWidth() * 0.3f;
-
-	// Main playlist panel
-	ImGui::BeginChild("Playlist", ImVec2(panelWidth, playlistHeight), true);
-
-	ImGui::Text("Playlist");
-	ImGui::Separator();
-
-	const auto& tracks = m_playlist.GetTracks();
-	for (size_t i = 0; i < tracks.size(); i++)
-	{
-		std::string filename = std::filesystem::path(tracks[i]).filename().string();
-		// Remove the file extension
-		filename = filename.substr(0, filename.find_last_of('.'));
-
-		// Selectable track
-		if (ImGui::Selectable(filename.c_str(), m_playlist.GetCurrentIndex() == i))
-		{
-			m_audioStreamer.OpenFromFile(tracks[i]);
-			m_audioStreamer.Play();
-		}
-	}
-	ImGui::EndChild();
-
-	// Playlist controls - now using 10% of window height
-	ImGui::BeginChild("PlaylistControls", ImVec2(panelWidth, controlsHeight), true);
-
-	// Calculate positioning for centered buttons
-	float buttonWidth = (panelWidth - ImGui::GetStyle().ItemSpacing.x * 4) * 0.5f;
-	float buttonHeight = controlsHeight - ImGui::GetStyle().ItemSpacing.y * 3;
-
-	// Add button
-	if (ImGui::Button((ICON_LC_PLUS "##AddFile"), ImVec2(buttonWidth, buttonHeight)))
-	{
-		m_showFileDialog = true;
-	}
-
-	// Remove button
-	ImGui::SameLine();
-	if (ImGui::Button((ICON_LC_MINUS "##RemoveFile"), ImVec2(buttonWidth, buttonHeight)))
-	{
-		size_t lastIndex = m_playlist.Size() - 1;
-		
-		// If the current track was removed, stop playback
-		if (m_playlist.GetCurrentIndex() == lastIndex)
-		{
-			m_audioStreamer.Stop();
-		}
-		
-		m_playlist.RemoveTrack(lastIndex);
-	}
-
-	ImGui::EndChild();
-}
-
 void Window::RenderControlsPanel()
 {
 	// Calculate the heights
@@ -213,7 +266,7 @@ void Window::RenderControlsPanel()
 		RenderPlaybackControls();
 		RenderVolumeControl();
 		RenderAudioFilters();
-		//RenderSpatialControl();
+		RenderSpatialControl();
 	}
 	else
 	{
@@ -250,9 +303,7 @@ void Window::RenderTrackInfo()
 	displayField("Genre:", trackInfo.genre);
 	displayField("Year:", trackInfo.year);
 
-	// Render additional components
-	RenderProgressBar();
-	RenderTimeDisplay();
+	ImGui::Separator();
 }
 
 void Window::RenderProgressBar()
@@ -453,216 +504,222 @@ void Window::RenderAudioFilters()
 
 void Window::RenderVisualizer()
 {
-	float VISUALIZER_HEIGHT = 100.0f;
-	const float MIN_BAR_HEIGHT = 2.0f;
-	const float BAR_SPACING = 2.0f; // Increased spacing
-
-	ImGui::BeginChild("Visualizer", ImVec2(0, VISUALIZER_HEIGHT), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-	const std::vector<float>& vizData = m_audioStreamer.GetVisualizerData();
-	const std::vector<float>& peakData = m_audioStreamer.GetBandPeaks();
-
-	if (vizData.empty())
+	m_viusalizerEnabled = false;
+	if (ImGui::CollapsingHeader("Visualizer##CollapsingHeader"))
 	{
-		ImGui::EndChild();
-		return;
-	}
+		m_viusalizerEnabled = true;
+		float VISUALIZER_HEIGHT = 100.0f;
+		const float MIN_BAR_HEIGHT = 2.0f;
+		const float BAR_SPACING = 2.0f; // Increased spacing
 
-	VISUALIZER_HEIGHT -= ImGui::GetStyle().WindowPadding.y * 2;
+		ImGui::BeginChild("Visualizer", ImVec2(0, VISUALIZER_HEIGHT), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-	// Calculate dimensions
-	ImVec2 contentRegion = ImGui::GetContentRegionAvail();
-	float availWidth = contentRegion.x;
-	float barWidth = (availWidth - (BAR_SPACING * (vizData.size() - 1))) / vizData.size();
-	float centerY = VISUALIZER_HEIGHT / 2.0f;
+		const std::vector<float>& vizData = m_audioStreamer.GetVisualizerData();
+		const std::vector<float>& peakData = m_audioStreamer.GetBandPeaks();
 
-	// Get colors from ImGui style
-	const ImGuiStyle& style = ImGui::GetStyle();
-	ImVec4 barColor = style.Colors[ImGuiCol_ButtonActive];
-	ImVec4 peakColor = ImVec4(barColor.x * 1.2f, barColor.y * 1.2f, barColor.z * 1.2f, 1.0f);
-
-	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(BAR_SPACING, 0));
-
-	for (size_t i = 0; i < vizData.size(); i++)
-	{
-		// Apply non-linear scaling for better visual dynamics
-		float value = std::pow(vizData[i], 0.7f); // Adjust power for different curve
-		float peak = std::pow(peakData[i], 0.7f);
-
-		float rawHeight = value * (VISUALIZER_HEIGHT * 0.95f);
-		float height = max(rawHeight, MIN_BAR_HEIGHT);
-		float halfHeight = height / 2.0f;
-
-		ImGui::PushID(static_cast<int>(i));
-
-		ImVec2 cursorPos = ImGui::GetCursorScreenPos();
-		ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-		// Calculate vertical positions
-		float topY = cursorPos.y + centerY - halfHeight;
-		float bottomY = cursorPos.y + centerY + halfHeight;
-
-		// Draw gradient bar
-		ImVec4 gradientTop = ImVec4(barColor.x * 1.2f, barColor.y * 1.2f, barColor.z * 1.2f, barColor.w);
-		ImVec4 gradientBottom = barColor;
-
-		drawList->AddRectFilledMultiColor(ImVec2(cursorPos.x, topY), ImVec2(cursorPos.x + barWidth, bottomY), ImGui::GetColorU32(gradientTop), ImGui::GetColorU32(gradientTop), ImGui::GetColorU32(gradientBottom), ImGui::GetColorU32(gradientBottom));
-
-		// Draw peak indicator
-		float peakHeight = peak * (VISUALIZER_HEIGHT * 0.95f);
-		float peakY = cursorPos.y + centerY - (peakHeight / 2.0f);
-		drawList->AddRectFilled(ImVec2(cursorPos.x, peakY), ImVec2(cursorPos.x + barWidth, peakY + 1.0f), ImGui::GetColorU32(peakColor));
-
-		ImGui::Dummy(ImVec2(barWidth, VISUALIZER_HEIGHT));
-		if (i < vizData.size() - 1)
+		if (vizData.empty())
 		{
-			ImGui::SameLine();
+			ImGui::EndChild();
+			return;
 		}
 
-		ImGui::PopID();
+		VISUALIZER_HEIGHT -= ImGui::GetStyle().WindowPadding.y * 2;
+
+		// Calculate dimensions
+		ImVec2 contentRegion = ImGui::GetContentRegionAvail();
+		float availWidth = contentRegion.x;
+		float barWidth = (availWidth - (BAR_SPACING * (vizData.size() - 1))) / vizData.size();
+		float centerY = VISUALIZER_HEIGHT / 2.0f;
+
+		// Get colors from ImGui style
+		const ImGuiStyle& style = ImGui::GetStyle();
+		ImVec4 barColor = style.Colors[ImGuiCol_ButtonActive];
+		ImVec4 peakColor = ImVec4(barColor.x * 1.2f, barColor.y * 1.2f, barColor.z * 1.2f, 1.0f);
+
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(BAR_SPACING, 0));
+
+		for (size_t i = 0; i < vizData.size(); i++)
+		{
+			// Apply non-linear scaling for better visual dynamics
+			float value = std::pow(vizData[i], 0.7f); // Adjust power for different curve
+			float peak = std::pow(peakData[i], 0.7f);
+
+			float rawHeight = value * (VISUALIZER_HEIGHT * 0.95f);
+			float height = max(rawHeight, MIN_BAR_HEIGHT);
+			float halfHeight = height / 2.0f;
+
+			ImGui::PushID(static_cast<int>(i));
+
+			ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+			// Calculate vertical positions
+			float topY = cursorPos.y + centerY - halfHeight;
+			float bottomY = cursorPos.y + centerY + halfHeight;
+
+			// Draw gradient bar
+			ImVec4 gradientTop = ImVec4(barColor.x * 1.2f, barColor.y * 1.2f, barColor.z * 1.2f, barColor.w);
+			ImVec4 gradientBottom = barColor;
+
+			drawList->AddRectFilledMultiColor(ImVec2(cursorPos.x, topY), ImVec2(cursorPos.x + barWidth, bottomY), ImGui::GetColorU32(gradientTop), ImGui::GetColorU32(gradientTop), ImGui::GetColorU32(gradientBottom), ImGui::GetColorU32(gradientBottom));
+
+			// Draw peak indicator
+			float peakHeight = peak * (VISUALIZER_HEIGHT * 0.95f);
+			float peakY = cursorPos.y + centerY - (peakHeight / 2.0f);
+			drawList->AddRectFilled(ImVec2(cursorPos.x, peakY), ImVec2(cursorPos.x + barWidth, peakY + 1.0f), ImGui::GetColorU32(peakColor));
+
+			ImGui::Dummy(ImVec2(barWidth, VISUALIZER_HEIGHT));
+			if (i < vizData.size() - 1)
+			{
+				ImGui::SameLine();
+			}
+
+			ImGui::PopID();
+		}
+
+		ImGui::PopStyleVar();
+		ImGui::EndChild();
 	}
 
-	ImGui::PopStyleVar();
-	ImGui::EndChild();
 }
 
-//void Window::RenderSpatialControl()
-//{
-//	ImGui::Spacing();
-//	ImGui::Separator();
-//	ImGui::Spacing();
-//
-//	ImGui::Text(ICON_LC_MOVE_3D "  Spatial Audio Control");
-//	ImGui::Spacing();
-//
-//	// Calculate available space
-//	ImVec2 availSpace = ImGui::GetContentRegionAvail();
-//	float gridSize = min(availSpace.x * 0.6f, 200.0f); // Take 60% of width, cap at 200px
-//
-//	// Create a horizontal layout
-//	ImGui::Columns(2, "SpatialControlLayout", false);
-//
-//	// Left column: Grid
-//	ImGui::SetColumnWidth(0, gridSize + ImGui::GetStyle().ItemSpacing.x);
-//
-//	// Create a child window for the 2D grid
-//	ImGui::BeginChild("SpatialGrid", ImVec2(gridSize, gridSize));
-//
-//	ImDrawList* drawList = ImGui::GetWindowDrawList();
-//	ImVec2 canvasPos = ImGui::GetCursorScreenPos();
-//	ImVec2 canvasSize(gridSize, gridSize);
-//
-//	// Draw grid background
-//	drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(40, 40, 40, 255));
-//
-//	// Draw grid lines
-//	for (int i = 1; i < 4; i++)
-//	{
-//		float linePos = i * (canvasSize.x / 4);
-//		// Vertical lines
-//		drawList->AddLine(ImVec2(canvasPos.x + linePos, canvasPos.y), ImVec2(canvasPos.x + linePos, canvasPos.y + canvasSize.y), IM_COL32(70, 70, 70, 255));
-//		// Horizontal lines
-//		drawList->AddLine(ImVec2(canvasPos.x, canvasPos.y + linePos), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + linePos), IM_COL32(70, 70, 70, 255));
-//	}
-//
-//	// Get current positions
-//	auto sourcePos = m_audioStreamer->getPosition();
-//	auto listenerPos = m_audioStreamer->getListenerPosition();
-//
-//	// Convert from OpenAL coordinates (-1 to 1) to screen coordinates
-//	ImVec2 sourceScreenPos(canvasPos.x + (sourcePos.first + 1.0f) * 0.5f * canvasSize.x, canvasPos.y + (sourcePos.second + 1.0f) * 0.5f * canvasSize.y);
-//	ImVec2 listenerScreenPos(canvasPos.x + (listenerPos.first + 1.0f) * 0.5f * canvasSize.x, canvasPos.y + (listenerPos.second + 1.0f) * 0.5f * canvasSize.y);
-//
-//	// Draw source point (orange)
-//	drawList->AddCircleFilled(sourceScreenPos, 6.0f, IM_COL32(255, 128, 0, 255));
-//	drawList->AddText(ImVec2(sourceScreenPos.x + 10, sourceScreenPos.y - 10), IM_COL32(255, 128, 0, 255), "Source");
-//
-//	// Draw listener point (white)
-//	drawList->AddCircleFilled(listenerScreenPos, 6.0f, IM_COL32(255, 255, 255, 255));
-//	drawList->AddText(ImVec2(listenerScreenPos.x + 10, listenerScreenPos.y - 10), IM_COL32(255, 255, 255, 255), "Listener");
-//
-//	// Handle dragging
-//	ImGui::InvisibleButton("canvas", canvasSize);
-//	if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0))
-//	{
-//		ImVec2 mousePos = ImGui::GetMousePos();
-//		ImVec2 relativePos((mousePos.x - canvasPos.x) / canvasSize.x, (mousePos.y - canvasPos.y) / canvasSize.y);
-//
-//		float x = (relativePos.x * 2.0f - 1.0f);
-//		float z = (relativePos.y * 2.0f - 1.0f);
-//
-//		m_audioStreamer->setPosition(x, z);
-//	}
-//
-//	ImGui::EndChild();
-//
-//	// Right column: Movement controls
-//	ImGui::NextColumn();
-//
-//	ImGui::Text("Movement Patterns");
-//	ImGui::Spacing();
-//
-//	// Calculate button width based on available space in the right column
-//	float buttonWidth = ImGui::GetColumnWidth() - ImGui::GetStyle().ItemSpacing.x * 2;
-//	float buttonHeight = 35.0f;
-//
-//	// Stack buttons vertically
-//	if (ImGui::Button((ICON_LC_ROTATE_3D "  Rotate"), ImVec2(buttonWidth, buttonHeight)))
-//	{
-//		m_isRotating = !m_isRotating;
-//		if (m_isRotating)
-//		{
-//			m_rotationStartTime = static_cast<float>(ImGui::GetTime());
-//			m_lastRotationAngle = 0.0f;
-//		}
-//	}
-//
-//	ImGui::Spacing();
-//
-//	if (ImGui::Button((ICON_LC_INFINITY "  Figure-8"), ImVec2(buttonWidth, buttonHeight)))
-//	{
-//		m_isFigure8 = !m_isFigure8;
-//		if (m_isFigure8)
-//		{
-//			m_figure8StartTime = static_cast<float>(ImGui::GetTime());
-//			m_isRotating = false;
-//		}
-//	}
-//
-//	ImGui::Spacing();
-//
-//	if (ImGui::Button((ICON_LC_UNDO_2 "  Reset"), ImVec2(buttonWidth, buttonHeight)))
-//	{
-//		m_audioStreamer->setPosition(0.0f, 0.0f);
-//		m_isRotating = false;
-//		m_isFigure8 = false;
-//	}
-//
-//	ImGui::Columns(1);
-//
-//	// Update positions based on animations
-//	if (m_isRotating)
-//	{
-//		float currentTime = static_cast<float>(ImGui::GetTime());
-//		float elapsedTime = currentTime - m_rotationStartTime;
-//		float angle = elapsedTime * 1.0f;
-//
-//		float radius = 0.5f;
-//		float x = radius * cos(angle);
-//		float z = radius * sin(angle);
-//
-//		m_audioStreamer->setPosition(x, z);
-//		m_lastRotationAngle = angle;
-//	}
-//	else if (m_isFigure8)
-//	{
-//		float currentTime = static_cast<float>(ImGui::GetTime());
-//		float t = (currentTime - m_figure8StartTime) * 0.5f;
-//
-//		float scale = 0.5f;
-//		float x = scale * cos(t);
-//		float z = scale * sin(2 * t) * 0.5f;
-//
-//		m_audioStreamer->setPosition(x, z);
-//	}
-//}
+void Window::RenderSpatialControl()
+{
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
+
+	ImGui::Text(ICON_LC_MOVE_3D "  Spatial Audio Control");
+	ImGui::Spacing();
+
+	// Calculate available space
+	ImVec2 availSpace = ImGui::GetContentRegionAvail();
+	float gridSize = min(availSpace.x * 0.6f, 200.0f); // Take 60% of width, cap at 200px
+
+	// Create a horizontal layout
+	ImGui::Columns(2, "SpatialControlLayout", false);
+
+	// Left column: Grid
+	ImGui::SetColumnWidth(0, gridSize + ImGui::GetStyle().ItemSpacing.x);
+
+	// Create a child window for the 2D grid
+	ImGui::BeginChild("SpatialGrid", ImVec2(gridSize, gridSize));
+
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+	ImVec2 canvasSize(gridSize, gridSize);
+
+	// Draw grid background
+	drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(40, 40, 40, 255));
+
+	// Draw grid lines
+	for (int i = 1; i < 4; i++)
+	{
+		float linePos = i * (canvasSize.x / 4);
+		// Vertical lines
+		drawList->AddLine(ImVec2(canvasPos.x + linePos, canvasPos.y), ImVec2(canvasPos.x + linePos, canvasPos.y + canvasSize.y), IM_COL32(70, 70, 70, 255));
+		// Horizontal lines
+		drawList->AddLine(ImVec2(canvasPos.x, canvasPos.y + linePos), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + linePos), IM_COL32(70, 70, 70, 255));
+	}
+
+	// Get current positions
+	auto sourcePos = m_audioStreamer.GetPosition();
+	auto listenerPos = m_audioStreamer.GetListenerPosition();
+
+	// Convert from OpenAL coordinates (-1 to 1) to screen coordinates
+	ImVec2 sourceScreenPos(canvasPos.x + (sourcePos.first + 1.0f) * 0.5f * canvasSize.x, canvasPos.y + (sourcePos.second + 1.0f) * 0.5f * canvasSize.y);
+	ImVec2 listenerScreenPos(canvasPos.x + (listenerPos.first + 1.0f) * 0.5f * canvasSize.x, canvasPos.y + (listenerPos.second + 1.0f) * 0.5f * canvasSize.y);
+
+	// Draw source point (orange)
+	drawList->AddCircleFilled(sourceScreenPos, 6.0f, IM_COL32(255, 128, 0, 255));
+	drawList->AddText(ImVec2(sourceScreenPos.x + 10, sourceScreenPos.y - 10), IM_COL32(255, 128, 0, 255), "Source");
+
+	// Draw listener point (white)
+	drawList->AddCircleFilled(listenerScreenPos, 6.0f, IM_COL32(255, 255, 255, 255));
+	drawList->AddText(ImVec2(listenerScreenPos.x + 10, listenerScreenPos.y - 10), IM_COL32(255, 255, 255, 255), "Listener");
+
+	// Handle dragging
+	ImGui::InvisibleButton("canvas", canvasSize);
+	if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0))
+	{
+		ImVec2 mousePos = ImGui::GetMousePos();
+		ImVec2 relativePos((mousePos.x - canvasPos.x) / canvasSize.x, (mousePos.y - canvasPos.y) / canvasSize.y);
+
+		float x = (relativePos.x * 2.0f - 1.0f);
+		float z = (relativePos.y * 2.0f - 1.0f);
+
+		m_audioStreamer.SetPosition(x, z);
+	}
+
+	ImGui::EndChild();
+
+	// Right column: Movement controls
+	ImGui::NextColumn();
+
+	ImGui::Text("Movement Patterns");
+	ImGui::Spacing();
+
+	// Calculate button width based on available space in the right column
+	float buttonWidth = ImGui::GetColumnWidth() - ImGui::GetStyle().ItemSpacing.x * 2;
+	float buttonHeight = 35.0f;
+
+	// Stack buttons vertically
+	if (ImGui::Button((ICON_LC_ROTATE_3D "  Rotate"), ImVec2(buttonWidth, buttonHeight)))
+	{
+		m_isRotating = !m_isRotating;
+		if (m_isRotating)
+		{
+			m_rotationStartTime = static_cast<float>(ImGui::GetTime());
+			m_lastRotationAngle = 0.0f;
+		}
+	}
+
+	ImGui::Spacing();
+
+	if (ImGui::Button((ICON_LC_INFINITY "  Figure-8"), ImVec2(buttonWidth, buttonHeight)))
+	{
+		m_isFigure8 = !m_isFigure8;
+		if (m_isFigure8)
+		{
+			m_figure8StartTime = static_cast<float>(ImGui::GetTime());
+			m_isRotating = false;
+		}
+	}
+
+	ImGui::Spacing();
+
+	if (ImGui::Button((ICON_LC_UNDO_2 "  Reset"), ImVec2(buttonWidth, buttonHeight)))
+	{
+		m_audioStreamer.SetPosition(0.0f, 0.0f);
+		m_isRotating = false;
+		m_isFigure8 = false;
+	}
+
+	ImGui::Columns(1);
+
+	// Update positions based on animations
+	if (m_isRotating)
+	{
+		float currentTime = static_cast<float>(ImGui::GetTime());
+		float elapsedTime = currentTime - m_rotationStartTime;
+		float angle = elapsedTime * 1.0f;
+
+		float radius = 0.5f;
+		float x = radius * cos(angle);
+		float z = radius * sin(angle);
+
+		m_audioStreamer.SetPosition(x, z);
+		m_lastRotationAngle = angle;
+	}
+	else if (m_isFigure8)
+	{
+		float currentTime = static_cast<float>(ImGui::GetTime());
+		float t = (currentTime - m_figure8StartTime) * 0.5f;
+
+		float scale = 0.5f;
+		float x = scale * cos(t);
+		float z = scale * sin(2 * t) * 0.5f;
+
+		m_audioStreamer.SetPosition(x, z);
+	}
+}

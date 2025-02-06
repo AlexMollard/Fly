@@ -42,5 +42,5 @@ private:
 
 public:
 	FileDialog(bool& show_dialog, std::string& selected_file, const std::vector<std::string>& allowed_extensions = { ".mp3" });
-	void Render();
+	void Render(float height);
 };

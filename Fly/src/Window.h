@@ -22,7 +22,10 @@ public:
 private:
 	void GuiSetup();
 
-	void RenderPlaylistPanel();
+	void RenderPlaylistPanel(float width, float height);
+	void RenderControlsPanel(float height);
+	void RenderBottomPanel(float height);
+
 	void RenderControlsPanel();
 	void RenderTrackInfo();
 	void RenderProgressBar();
@@ -31,7 +34,7 @@ private:
 	void RenderVolumeControl();
 	void RenderAudioFilters();
 	void RenderVisualizer();
-	// void RenderSpatialControl();
+	void RenderSpatialControl();
 
 	std::string FormatTime(double seconds);
 
@@ -43,6 +46,8 @@ private:
 	bool m_showFileDialog = false;
 	std::string m_selectedFile;
 	FileDialog m_dialog;
+
+	bool m_viusalizerEnabled = false;
 
 	// Spatial audio animation state
     bool m_isRotating = false;

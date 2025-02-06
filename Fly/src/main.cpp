@@ -9,7 +9,7 @@
 static OutputDebugStream dbgout;
 
 constexpr std::string_view WINDOW_TITLE = "Fly Player";
-constexpr HelloImGui::ScreenSize WINDOW_SIZE{ 900, 600 };
+constexpr HelloImGui::ScreenSize WINDOW_SIZE{ 1920, 1080 };
 constexpr float BASE_FONT_SIZE = 16.0f;
 
 struct FontConfig

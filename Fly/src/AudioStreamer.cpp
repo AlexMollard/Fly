@@ -6,6 +6,7 @@
 #include <array>
 #include <cstring>
 #include <stdexcept>
+#include <AL/alext.h>
 
 AudioStreamer::AudioStreamer()
 {
@@ -90,7 +91,7 @@ void AudioStreamer::InitOpenAL()
 	alcGetIntegerv(m_device, ALC_REFRESH, 1, &refresh);
 
 	// Create context with high-quality settings
-	std::array<ALCint, 11> attrs = { ALC_FREQUENCY,
+	std::array<ALCint, 15> attrs = { ALC_FREQUENCY,
 		48000,
 		ALC_REFRESH,
 		refresh,
@@ -100,6 +101,10 @@ void AudioStreamer::InitOpenAL()
 		4,
 		ALC_STEREO_SOURCES,
 		2,
+		ALC_OUTPUT_MODE_SOFT,
+		ALC_STEREO_HRTF_SOFT,
+		ALC_HRTF_SOFT,
+		ALC_TRUE,
 		0 };
 
 	m_context = alcCreateContext(m_device, attrs.data());
@@ -133,6 +138,41 @@ void AudioStreamer::InitOpenAL()
 	alSourcef(m_source, AL_GAIN, m_volume);
 	alSourcei(m_source, AL_SOURCE_RELATIVE, AL_TRUE);
 	LOG_DEBUG("Source properties configured - Pitch: 1.0, Initial volume: {}", m_volume.load());
+
+		ALCint hrtf_status;
+	alcGetIntegerv(m_device, ALC_HRTF_STATUS_SOFT, 1, &hrtf_status);
+
+	if (hrtf_status == ALC_HRTF_ENABLED_SOFT)
+	{
+		const ALchar* hrtf_name = alcGetString(m_device, ALC_HRTF_SPECIFIER_SOFT);
+		LOG_INFO("HRTF is enabled using: {}", hrtf_name ? hrtf_name : "unknown");
+	}
+	else
+	{
+		LOG_WARN("HRTF is not enabled");
+	}
+
+	// Set initial source properties with error checking
+	alSourcei(m_source, AL_SOURCE_RELATIVE, AL_FALSE);     // World-space positioning
+	alSourcei(m_source, AL_SOURCE_SPATIALIZE_SOFT, AL_TRUE); // Enable spatization
+	alSourcef(m_source, AL_CONE_INNER_ANGLE, 360.0f);
+	alSourcef(m_source, AL_CONE_OUTER_ANGLE, 360.0f);
+
+	alSpeedOfSound(343.3f); // Speed of sound in m/s
+	alDopplerFactor(1.0f);  // Realistic doppler effect
+	alDistanceModel(AL_LINEAR_DISTANCE_CLAMPED);
+
+	// Initialize listener position and orientation
+	float listenerPos[3] = { 0.0f, 0.0f, 0.0f };
+	float listenerOri[6] = { 0.0f,
+		0.0f,
+		-1.0f, // Forward vector
+		0.0f,
+		1.0f,
+		0.0f }; // Up vector
+	alListenerfv(AL_POSITION, listenerPos);
+	alListenerfv(AL_ORIENTATION, listenerOri);
+	alListenerf(AL_GAIN, 1.0f);
 
 	// Start streaming thread
 	m_isRunning = true;
@@ -358,6 +398,23 @@ double AudioStreamer::GetPlayingOffset() const
 	return static_cast<double>(m_samplesProcessed + sampleOffset) / (m_config.sampleRate * m_config.channelCount);
 }
 
+void AudioStreamer::SetPosition(float x, float z)
+{
+	m_positionX = std::clamp(x, -1.0f, 1.0f);
+	m_positionZ = std::clamp(z, -1.0f, 1.0f);
+
+	alSource3f(m_source, AL_POSITION, m_positionX, 0.0f, m_positionZ);
+	CheckAlError("Failed to set source position");
+}
+
+void AudioStreamer::SetListenerPosition(float x, float z)
+{
+	m_listenerX = std::clamp(x, -1.0f, 1.0f);
+	m_listenerZ = std::clamp(z, -1.0f, 1.0f);
+
+	alListener3f(AL_POSITION, m_listenerX, 0.0f, m_listenerZ);
+	CheckAlError("Failed to set listener position");
+}
 
 void AudioStreamer::SetPlayingOffset(double timeOffset)
 {

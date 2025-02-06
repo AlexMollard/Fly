@@ -405,14 +405,12 @@ void FileDialog::RenderFileList()
 	ImGui::EndChild();
 }
 
-void FileDialog::Render()
+void FileDialog::Render(float height)
 {
 	if (!m_show_dialog)
 		return;
 
-	float totalHeight = ImGui::GetWindowHeight() - ImGui::GetStyle().WindowPadding.y * 2.375f;
-
-	ImGui::BeginChild("File Explorer##dialog", ImVec2(0, totalHeight), true);
+	ImGui::BeginChild("File Explorer##dialog", ImVec2(0, height), true);
 	{
 		// Toolbar and path area with proper spacing
 		ImGui::BeginGroup();
