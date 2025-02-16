@@ -1,0 +1,12 @@
+[submodule "external/openal-soft"]
+	path = external/openal-soft
+	url = https://github.com/kcat/openal-soft.git
+[submodule "external/imgui"]
+	path = external/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "external/libsndfilem"]
+	path = external/libsndfilem
+	url = https://github.com/libsndfile/libsndfile.git
+[submodule "external/hello-imgui"]
+	path = external/hello-imgui
+	url = https://github.com/pthom/hello_imgui.git
