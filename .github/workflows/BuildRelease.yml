@@ -1,8 +1,8 @@
 name: Windows Build
 on:
   push:
-      tags:
-          - "*"
+    tags:
+      - "*"
 
 jobs:
   build:
@@ -23,16 +23,14 @@ jobs:
           .\bootstrap-vcpkg.bat
           .\vcpkg integrate install
 
-      - name: Cache build
+      - name: Cache
         uses: actions/cache@v4
         with:
           path: |
-            x64/Release
-            x64/Debug
-          key: build-${{ runner.os }}-${{ github.ref }}-${{ hashFiles('**/*.vcxproj', '**/*.sln') }}
+            ${{ github.workspace }}\Fly\vcpkg_installed
+          key: cache
           restore-keys: |
-            build-${{ runner.os }}-
-            build-
+            cache
 
       - name: Build solution
         working-directory: ${{ github.workspace }}
