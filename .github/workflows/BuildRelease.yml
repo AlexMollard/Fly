@@ -21,30 +21,57 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v1.1
-      
+
+      # Cache vcpkg installed libraries
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            vcpkg/installed
+            vcpkg/buildtrees
+            vcpkg/packages
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+            vcpkg-
+
       - name: Setup vcpkg
         run: |
           git clone https://github.com/microsoft/vcpkg.git
           cd vcpkg
           .\bootstrap-vcpkg.bat
           .\vcpkg integrate install
-          
-      - name: Build solution
-        working-directory: ${{ github.workspace }}
-        run: |
-          msbuild /p:Configuration=Release /p:Platform=x64 /p:VcpkgTriplet=x64-windows /p:OutDir=bin\Release\ /p:WindowsTargetPlatformVersion=10.0 /p:RuntimeLibrary=MultiThreaded "Fly.sln"
 
-      - name: Copy Dependencies
-        shell: cmd
+      # Cache MSBuild intermediate outputs (optional, can be unstable if toolset changes)
+      - name: Cache build
+        uses: actions/cache@v4
+        with:
+          path: |
+            x64/Release
+            x64/Debug
+          key: build-${{ runner.os }}-${{ github.ref }}-${{ hashFiles('**/*.vcxproj', '**/*.sln') }}
+          restore-keys: |
+            build-${{ runner.os }}-
+
+      - name: Build solution
+        run: |
+          msbuild Fly.sln ^
+            /p:Configuration=Release ^
+            /p:Platform=x64 ^
+            /p:VcpkgTriplet=x64-windows ^
+            /p:WindowsTargetPlatformVersion=10.0 ^
+            /p:RuntimeLibrary=MultiThreaded
+
+      - name: Find and copy build outputs
+        shell: pwsh
         run: |
           mkdir release
-          copy bin\Release\*.exe release\
-          copy bin\Release\*.dll release\
-          if exist assets\*.ttf copy assets\*.ttf release\
-          powershell Compress-Archive -Path release\* -DestinationPath Fly-windows.zip
+          Get-ChildItem -Recurse -Include *.exe,*.dll | ForEach-Object { Copy-Item $_.FullName release }
+          if (Test-Path assets\*.ttf) { Copy-Item assets\*.ttf release }
+          Compress-Archive -Path release\* -DestinationPath Fly-windows.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
