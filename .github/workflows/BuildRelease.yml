@@ -1,10 +1,5 @@
 name: Windows Build
 on:
-  push:
-    branches: [ main ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
     inputs:
       version:
@@ -54,18 +49,11 @@ jobs:
             /p:WindowsTargetPlatformVersion=10.0 `
             /p:RuntimeLibrary=MultiThreaded
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: Fly-windows
-          path: ${{ github.workspace }}\Fly\bin\release
-          if-no-files-found: error
-
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: Fly-windows.zip
-          draft: false
-          prerelease: false
-          generate_release_notes: true
+          name: "Release"
+          make_latest: true
+          token: ${{ secrets.TOKEN }}
+          files:
+            ${{ github.workspace }}\Fly\bin\release
