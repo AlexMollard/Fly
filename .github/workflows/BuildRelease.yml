@@ -58,11 +58,11 @@ jobs:
 
       - name: Build solution
         run: |
-          msbuild Fly.sln ^
-            /p:Configuration=Release ^
-            /p:Platform=x64 ^
-            /p:VcpkgTriplet=x64-windows ^
-            /p:WindowsTargetPlatformVersion=10.0 ^
+          msbuild Fly.sln `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /p:VcpkgTriplet=x64-windows `
+            /p:WindowsTargetPlatformVersion=10.0 `
             /p:RuntimeLibrary=MultiThreaded
 
       - name: Find and copy build outputs
