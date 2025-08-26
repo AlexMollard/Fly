@@ -1,12 +1,8 @@
 name: Windows Build
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version number (e.g., v1.0.0)'
-        required: false
-        default: ''
-        type: string
+  push:
+      tags:
+          - "*"
 
 jobs:
   build:
