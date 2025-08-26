@@ -55,6 +55,7 @@ jobs:
           key: build-${{ runner.os }}-${{ github.ref }}-${{ hashFiles('**/*.vcxproj', '**/*.sln') }}
           restore-keys: |
             build-${{ runner.os }}-
+            build-
 
       - name: Build solution
         run: |
@@ -69,9 +70,17 @@ jobs:
         shell: pwsh
         run: |
           mkdir release
-          Get-ChildItem -Recurse -Include *.exe,*.dll | ForEach-Object { Copy-Item $_.FullName release }
+          # Find all exe and dll files, excluding the release folder itself
+          Get-ChildItem -Recurse -Include *.exe,*.dll -File |
+            Where-Object { $_.FullName -notlike "*\release\*" } |
+            ForEach-Object { Copy-Item $_.FullName release }
+
+          # Copy assets if they exist
           if (Test-Path assets\*.ttf) { Copy-Item assets\*.ttf release }
+
+          # Create the zip
           Compress-Archive -Path release\* -DestinationPath Fly-windows.zip
+
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
