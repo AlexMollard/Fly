@@ -25,14 +25,24 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v1.1
 
+      - name: Restore vcpkg cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg/installed
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+            vcpk-
+
       - name: Setup vcpkg
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          cd vcpkg
-          .\bootstrap-vcpkg.bat
-          .\vcpkg integrate install
+          if not exist vcpkg (
+            git clone https://github.com/microsoft/vcpkg.git
+            cd vcpkg
+            .\bootstrap-vcpkg.bat
+          )
+          .\vcpkg\vcpkg integrate install
 
-      # Cache MSBuild intermediate outputs (optional, can be unstable if toolset changes)
       - name: Cache build
         uses: actions/cache@v4
         with:
@@ -59,7 +69,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Fly-windows
-          path: bin\release
+          path: ${{ github.workspace }}/bin/release
+          if-no-files-found: error
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
