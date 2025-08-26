@@ -39,11 +39,18 @@ jobs:
             vcpkg-
 
       - name: Setup vcpkg
+        shell: pwsh
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          cd vcpkg
-          .\bootstrap-vcpkg.bat
-          .\vcpkg integrate install
+          if (-Not (Test-Path vcpkg)) {
+            git clone https://github.com/microsoft/vcpkg.git
+            Set-Location vcpkg
+            .\bootstrap-vcpkg.bat
+            .\vcpkg integrate install
+          } else {
+            Write-Host "vcpkg folder exists, skipping clone and bootstrap"
+            Set-Location vcpkg
+            .\vcpkg integrate install
+          }
 
       # Cache MSBuild intermediate outputs (optional, can be unstable if toolset changes)
       - name: Cache build
