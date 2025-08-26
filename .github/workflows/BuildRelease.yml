@@ -25,32 +25,12 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v1.1
 
-      # Cache vcpkg installed libraries
-      - name: Cache vcpkg
-        uses: actions/cache@v4
-        with:
-          path: |
-            vcpkg/installed
-            vcpkg/buildtrees
-            vcpkg/packages
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-
-            vcpkg-
-
       - name: Setup vcpkg
-        shell: pwsh
         run: |
-          if (-Not (Test-Path vcpkg)) {
-            git clone https://github.com/microsoft/vcpkg.git
-            Set-Location vcpkg
-            .\bootstrap-vcpkg.bat
-            .\vcpkg integrate install
-          } else {
-            Write-Host "vcpkg folder exists, skipping clone and bootstrap"
-            Set-Location vcpkg
-            .\vcpkg integrate install
-          }
+          git clone https://github.com/microsoft/vcpkg.git
+          cd vcpkg
+          .\bootstrap-vcpkg.bat
+          .\vcpkg integrate install
 
       # Cache MSBuild intermediate outputs (optional, can be unstable if toolset changes)
       - name: Cache build
