@@ -59,7 +59,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Fly-windows
-          path: Fly-windows.zip
+          path: bin\release
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
