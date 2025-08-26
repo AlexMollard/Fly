@@ -58,29 +58,15 @@ jobs:
             build-
 
       - name: Build solution
+        working-directory: ${{ github.workspace }}
         run: |
           msbuild Fly.sln `
             /p:Configuration=Release `
             /p:Platform=x64 `
             /p:VcpkgTriplet=x64-windows `
+            /p:OutDir=bin\release\ `
             /p:WindowsTargetPlatformVersion=10.0 `
             /p:RuntimeLibrary=MultiThreaded
-
-      - name: Find and copy build outputs
-        shell: pwsh
-        run: |
-          mkdir release
-          # Find all exe and dll files, excluding the release folder itself
-          Get-ChildItem -Recurse -Include *.exe,*.dll -File |
-            Where-Object { $_.FullName -notlike "*\release\*" } |
-            ForEach-Object { Copy-Item $_.FullName release }
-
-          # Copy assets if they exist
-          if (Test-Path assets\*.ttf) { Copy-Item assets\*.ttf release }
-
-          # Create the zip
-          Compress-Archive -Path release\* -DestinationPath Fly-windows.zip
-
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
