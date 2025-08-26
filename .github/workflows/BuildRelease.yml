@@ -45,11 +45,14 @@ jobs:
             /p:WindowsTargetPlatformVersion=10.0 `
             /p:RuntimeLibrary=MultiThreaded
 
+      - name: Zip release folder
+        run: |
+          Compress-Archive -Path "${{ github.workspace }}\Fly\bin\release\*" -DestinationPath "${{ github.workspace }}\Fly\bin\Fly-windows.zip" -Force
+
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Release"
+          name: "Release v${{ github.ref_name }}"
           make_latest: true
           token: ${{ secrets.TOKEN }}
-          files:
-            ${{ github.workspace }}\Fly\bin\release
+          files: ${{ github.workspace }}\Fly\bin\Fly-windows.zip
