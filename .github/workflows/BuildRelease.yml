@@ -58,7 +58,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Fly-windows
-          path: ${{ github.workspace }}/bin/release
+          path: ${{ github.workspace }}\Fly\bin\release
           if-no-files-found: error
 
       - name: Create Release
