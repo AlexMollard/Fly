@@ -52,7 +52,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Release v${{ github.ref_name }}"
+          name: "Release"
           make_latest: true
           token: ${{ secrets.TOKEN }}
           files: ${{ github.workspace }}\Fly\bin\Fly-windows.zip
